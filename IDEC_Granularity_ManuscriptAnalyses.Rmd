@@ -1,0 +1,1044 @@
+---
+title: "IDEC_Granularity_ManuscriptAnalyses"
+author: "Adrienne Bonar"
+date:  "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+```{r load-packages}
+#Loading packages
+library(readxl) #for read_excel
+library(readr) #for read_csv
+library(magrittr) #for pipes
+library(knitr) #for knitting
+library(dplyr) #for mutating, filtering data
+library(huxtable) #for descriptives table
+library(reshape) #for transposing data
+library(stringr) #for string manipulations
+library(psych) #for descriptives & correlations
+library(irr) #for ICCs
+library(ggplot2) #for plots
+library(nFactors)#for n_factors
+library(GPArotation) #for EFA
+library(parameters) #for EFA
+library(correlation) #for correlations
+library(lm.beta) #for regressions
+library(apaTables) #for apa style regression tables & comparing models
+library(car) #for regression diagnostics
+library(imager) #for mediation
+library(mediation) #for mediation
+library(lavaan) #for SEM/CFA
+library(semPlot) #for SEM
+```
+
+# Data Prep
+
+```{r data-prep, echo=TRUE}
+#Reading in data
+DRM_dataset <- readr::read_csv("/Users/adriennebonar/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/Grad_School/Research/Projects/Granularity/IDEC_Granularity/Data/Granularity_Analyses/datasets/WdataDRM.csv")
+IDEC_S1S2_dataset <- readxl::read_excel("/Users/adriennebonar/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/Grad_School/Research/Projects/Granularity/IDEC_Granularity/Data/Granularity_Analyses/datasets/IDEC_S1S2DataforR_02252020.xlsx") %>%
+  dplyr::select(ID, Gender, Race, Age, BMI, PEP_TSSTReactBL, HR_TSSTReactBL, NegHiEmo, NegEmo, HiEmo, 
+                PosEmo, LoEmo, contains("PEP"), contains("Emo_"), contains ("SS_"), contains("Sit_")) %>%
+  dplyr::mutate(SNSreact = PEP_TSSTReactBL * -1,
+                Somatic_mean = (SS_HeartRateIncrease + SS_DiffBreathing + SS_Faint + SS_StomTense + SS_Shaky + SS_Sweaty + 
+                                  SS_Pale + SS_StomPit + SS_Red + SS_Butterflies +  SS_Numb + SS_Powerful + SS_Sick + SS_Tense+ 
+                                  SS_Sluggish + SS_Empty + SS_Drained+ SS_Exhausted + SS_Headache + SS_Throb + SS_Fidgety + 
+                                  SS_Energized + SS_Shivering + SS_SpineTingle + SS_Pain + SS_Stiff + SS_Weak + SS_HeartPound +
+                                  SS_Awake + SS_TightChest + SS_Weary + SS_Restless + SS_Jittery + SS_BloodPump+ SS_Cold +
+                                  SS_Goosebumps+ SS_Heavy + SS_Hot + SS_HeartPalp + SS_usea+ SS_Tingly + SS_Dizzy)/42)
+Qualtrics_S1_dataset <- read_excel("/Users/adriennebonar/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/Grad_School/Research/Projects/Granularity/IDEC_Granularity/Data/Granularity_Analyses/datasets/IDEC_S1QualHBD_NoDRM_071719.xlsx") %>%
+  dplyr::select(ID, contains("RegEff"), contains("RDEES"), contains("Describe"), contains("Identify"), contains("EC")) %>%
+  dplyr::mutate(RegEfficacy = (RegEff1 + RegEff2 + RegEff3 + RegEff4)/4,
+                Differentiation= (RDEES1 + RDEES2 + RDEES3 + RDEES4 + RDEES5 + RDEES6 + RDEES7)/7,
+                Emo_Clarity = ((8- EC7) + (8- EC8_ToReverse) + (8- EC9_ToReverse) + (8-EC10_ToReverse) + (8- EC11_ToReverse) + EC1 + 
+                  EC2 + EC3 + EC4 + EC5 + EC6)/11,
+                TAS_Describe = ((6- TAS4_Describe_ToReverse) + TAS2_Describe + TAS11_Describe + TAS12_Describe + TAS17_Describe)/6,
+                TAS_Identify = (TAS1_Identify + TAS3_Identify + TAS6_Identify + TAS7_Identify + TAS9_Identify + TAS13_Identify +
+                                  TAS14_Identify)/7)
+Recovery_dataset <- read_excel("/Users/adriennebonar/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/Grad_School/Research/Projects/Granularity/IDEC_Granularity/Data/Granularity_Analyses/datasets/IDEC_RecoveryScores_01202022.xlsx") %>%
+  dplyr::select(ID, PEP_RecoverytoBaseline, RMSDD_RecoverytoBaseline) %>%
+  dplyr::mutate(SNSrecover = (PEP_RecoverytoBaseline * -1),
+                RMSDDrecover = (RMSDD_RecoverytoBaseline))
+RMSDD_dataset <- read_excel("/Users/adriennebonar/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/Grad_School/Research/Projects/Granularity/IDEC_Granularity/Data/Granularity_Analyses/datasets/IDEC_S2_RMSDDs_08202021.xlsx") %>%
+  dplyr::select(ID, cvRMSDD_TSSTReact, RMSDD_TSSTReact)
+
+#Merge into one dataframe
+noicc_dataset <- merge(Qualtrics_S1_dataset, IDEC_S1S2_dataset, by=("ID"))
+noicc_dataset <- merge(noicc_dataset, Recovery_dataset, by=("ID"))
+noicc_dataset <- merge(noicc_dataset,RMSDD_dataset, by=("ID"))
+
+#Demographic variables as factors
+noicc_dataset$Race <- factor(noicc_dataset$Race, levels = c(1,2,3,4,5,6,7,8), labels = c("American Indian or Alaskan Native", "Asian American", "Native Hawaiian or other Pacific Islander", "African American", "European American", "Latin American","More than one race", "Other")) #labeling race
+noicc_dataset$Sex <- factor(noicc_dataset$Gender, levels = c(0,1), labels = c("Female", "Male")) #labeling sex
+```
+
+## ICCs for trait emo granularity
+
+```{r granularity, echo=TRUE}
+#code adapted from Kalokerinos, E. K., Erbas, Y., Ceulemans, E., & Kuppens, P. (2019). Differentiate to regulate: Low negative emotion differentiation is associated with ineffective use but not selection of emotion-regulation strategies. Psychological Science, 30(6), 863-879. https://osf.io/bmaf2/
+
+subjects_neg=unique(DRM_dataset$ID)
+
+#Trait ICCs for NEGATIVE emotion 
+icc_list_neg=NULL #creating empty dataframe
+for (sub in subjects_neg){
+  sub_ldata_neg=DRM_dataset[DRM_dataset[,2]==sub,c("Anger", "Anxious", "Boredom", "Bittersweet", "Disgust", "Embarrass", "Fear", "Guilt", "Irritable", "Jealous", "Sad")]  #selecting data for current subject
+  icc=icc(sub_ldata_neg, model="twoway",type = "agreement", unit="average")  #computes ICC
+  icc_temp=icc$value
+
+  icc_temp[icc_temp < 0] <- 0 #transforming negative ICC values to 0 per recommendations in Cohen et al. (2003); 37 subjects' ICC values were transformed 
+  
+  fz_iccTemp=fisherz(icc_temp) #fisher z transformation
+  row_temp=c(sub,icc_temp, fz_iccTemp) #creating temporary matrix for current subject with ID, ICC, and fisher transformed ICC
+  icc_list_neg=rbind(icc_list_neg,row_temp)
+}
+
+icc_list_neg=as.data.frame(icc_list_neg)
+colnames(icc_list_neg)=c("ID","ICCneg", "ICCneg_fz")
+
+icc_list_neg_complete=icc_list_neg[complete.cases(icc_list_neg),]  #choosing subjects with both ICC and fisher transformed ICC
+
+#Trait ICCs for POSITIVE emotion
+subjects_pos=unique(DRM_dataset$ID)
+
+icc_list_pos=NULL #creating empty dataframe
+for (sub in subjects_pos){
+  sub_ldata_pos=DRM_dataset[DRM_dataset[,2]==sub,c("Amusement", "Awe", "Content", "Excitement", "Gratitude", "Happy", "Love", "Pleased", "Proud")]  #selecting data for current subject
+  
+  icc_p=icc(sub_ldata_pos, model="twoway",type= "agreement", unit="average")  #computes ICC
+  icc_p_temp=icc_p$value
+  
+  icc_p_temp[icc_p_temp <0] <- 0 #transforming negative ICC values to 0 per recommendations in Cohen et al. (2003); 3 subjects ICC values were transformed
+  
+  fz_p_iccTemp=fisherz(icc_p_temp) #fisher z transformation
+  
+  row_p_temp=c(sub,icc_p_temp, fz_p_iccTemp) #creating temporary matrix for current subject with ID, ICC, and fisher transformed ICC
+  icc_list_pos=rbind(icc_list_pos,row_p_temp)
+}
+
+icc_list_pos=as.data.frame(icc_list_pos) 
+colnames(icc_list_pos)=c("ID","ICCpos", "ICCpos_fz") #renaming columns
+
+icc_list_pos_complete=icc_list_pos[complete.cases(icc_list_pos),]  #choosing subjects with both ICC and fisher transformed ICC
+
+#Merging ICC dataframes together
+icc_dataset <- merge(icc_list_neg, icc_list_pos,  by=c("ID"))
+
+#Reverse scoring the ICC so higher ICC = higher granularity
+icc_dataset$ICCneg_fz_rev <- -1* icc_dataset$ICCneg_fz
+icc_dataset$ICCpos_fz_rev <- -1* icc_dataset$ICCpos_fz
+```
+
+## Person-level mean negative and positive emotion
+
+```{r mean-emotionality}
+subjects_DRM=unique(DRM_dataset$ID)
+
+DRM_mean=NULL #creating empty dataframe
+for (sub in subjects_DRM){
+  DRM_ldata=DRM_dataset[DRM_dataset[,2]==sub,c("Anger", "Anxious", "Boredom", "Bittersweet", "Disgust", "Embarrass", "Fear", "Guilt", "Irritable", "Jealous", "Sad", "Amusement", "Awe", "Content", "Excitement", "Gratitude", "Happy", "Love", "Pleased", "Proud")]  #selecting all data for current subject
+  
+#Computing mean negative emotion
+mean_neg= rowMeans(subset(DRM_ldata, select=c("Anger", "Anxious", "Boredom", "Bittersweet", "Disgust", "Embarrass", "Fear", "Guilt", "Irritable", "Jealous", "Sad")), na.rm=TRUE)
+temp_mean_neg = mean(mean_neg, na.rm=TRUE)
+
+#Computing mean positive emotion
+mean_pos <- rowMeans(subset(DRM_ldata, select=c("Amusement", "Awe", "Content", "Excitement", "Gratitude", "Happy", "Love", "Pleased", "Proud")), na.rm=TRUE)
+temp_mean_pos= mean(mean_pos, na.rm= TRUE)
+
+row_temp = c(sub, temp_mean_neg, temp_mean_pos)
+DRM_mean=rbind(DRM_mean, row_temp)
+}
+
+colnames(DRM_mean)=c("ID","DRMneg_mean","DRMpos_mean") #renaming columns
+DRM_mean= as.data.frame(DRM_mean)
+
+icc_dataset <- merge(DRM_mean, icc_dataset, by = c("ID")) #merging emotion mean data with ICC data
+
+#Merging ICCs into main dataset
+data <- merge(noicc_dataset, icc_dataset, by= c("ID"))
+data <- as.data.frame(data)
+```
+
+## Emo complexity EFA (using subscale scores)
+
+```{r, efa-complexity-describe}
+efa_means_dataset <- data %>%
+  dplyr::select(ICCneg_fz_rev, ICCpos_fz_rev, Differentiation, Emo_Clarity, TAS_Describe, TAS_Identify)
+
+psych::describe(efa_means_dataset, fast = FALSE)
+psych::multi.hist(efa_means_dataset) #printing histograms to check the distribution of responses per item
+lowerCor(efa_means_dataset, digits=2) #looking at bivariate correlations among items
+```
+
+### Scree plot
+
+```{r, efa-complexity-enumeration}
+#Checking suitability of data for Factor Analysis
+parameters::check_factorstructure(efa_means_dataset)
+
+#Checking for number of factors
+factors <- n_factors(efa_means_dataset)
+psych::scree(efa_means_dataset, factors = T) #generating a scree.plot of the eigenvalues
+
+#Running parallel analysis
+parallel <- fa.parallel(efa_means_dataset, fa='pc') 
+
+#Creating a data frame from observed eigenvalues in 'parallel'
+eigen <- data.frame(parallel$fa.values)
+eigen$num <- c(row.names(eigen))
+eigen$num <- as.numeric(eigen$num)
+colnames(eigen) <-c('eigenvalue', 'factor number')
+
+```
+
+### EFA Results
+
+```{r, efa-complexity-extraction}
+#Performing EFA with 1 factor using maximum likelihood with promax rotation 
+params_1promax <- psych::fa(efa_means_dataset, nfactors = 1, rotate = "promax", fm= "ml") %>% 
+model_parameters(sort = FALSE, threshold = 0.30)
+summary_1promax <- fa(efa_means_dataset, nfactors= 1, rotate= 'promax', fm='ml')
+print(summary_1promax) #fit indices suggest okay model fit
+
+#Running same model but dropping ICCpos and ICCneg
+params_1promax <- psych::fa(efa_means_dataset %>% dplyr::select(-contains("ICC")), nfactors = 1, rotate = "promax", fm= "ml") %>% 
+model_parameters(sort = FALSE, threshold = 0.30)
+summary_1promax <- fa(efa_means_dataset %>% dplyr::select(-contains("ICC")), nfactors= 1, rotate= 'promax', fm='ml')
+print(summary_1promax) #fit indices are worse
+
+#Get factor scores
+fs <- factor.scores(efa_means_dataset, summary_1promax, method = c("regression")) #getting the factor scores #getting the factor scores
+fs <- fs$scores 
+full_efa_dataset <- cbind(fs, efa_means_dataset[1])
+
+#Merge EFA data with the rest of the data
+data <- merge(full_efa_dataset, data, by=c("ID"))
+```
+
+
+## Post-TSST appraisals EFA
+
+```{r efa-appraise-describe}
+judgement_dataset <- data %>%
+  dplyr::select(ID, contains("Sit_")) %>%
+  tidyr::drop_na()
+
+psych::describe(judgement_dataset[2:26], fast = FALSE) 
+psych::multi.hist(judgement_dataset[2:26]) #printing histograms to check the distribution of responses per item; several items aren't normally distributed
+
+judge_corr <- correlation(judgement_dataset[2:26])
+summary(judge_corr) #correlation matrix
+```
+
+### Scree Plot
+
+```{r efa-appraise-enumeration}
+#Checking suitability of data for EFA
+parameters::check_factorstructure(judgement_dataset[2:26])
+
+#Checking for number of factors
+factors <- n_factors(judgement_dataset[2:26])
+psych::scree(judgement_dataset[2:26], factors = T) #generating a scree.plot of the eigenvalues
+
+#Running parallel analysis
+parallel <- fa.parallel((judgement_dataset[2:26]), fa='pc') 
+
+#Creating a data frame from observed eigenvalues in 'parallel'
+eigen <- data.frame(parallel$fa.values)
+eigen$num <- c(row.names(eigen))
+eigen$num <- as.numeric(eigen$num)
+colnames(eigen) <-c('eigenvalue', 'factor number')
+
+```
+
+### EFA/CFA Results
+
+```{r efa-appraise-extraction}
+#Performing EFA with 2 factors using weighted least squares
+fa1 <- psych::fa(judgement_dataset[2:26], nfactors = 2, rotate = "promax", fm= "wls") 
+print(fa1)
+
+#CFA with diagonally weighted least squares
+model <- 'Other=~ Sit_Abandoned + Sit_Cheated +  Sit_Lonely + Sit_Rejected + Sit_Threat + Sit_Thrwarted + Sit_Transgress + Sit_Uneventful + Sit_Unresolved 
+          Self=~ Sit_Challenged + Sit_Defeated + Sit_Failure + Sit_Incompetent + Sit_Mistaken + Sit_Overwhelmed + Sit_Uncertain + Sit_Vulnerable'
+
+fit.dwls <- lavaan::cfa(model, data= judgement_dataset[2:26], estimator = "DWLS")
+summary(fit.dwls, fit.measures = TRUE)
+
+#Getting factor scores
+cfas <- lavPredict(fit.dwls, method= "Bartlett")
+full_judgement_dataset <- cbind(judgement_dataset, cfas)
+full_judgement_dataset <- full_judgement_dataset %>% #selecting only the variables that needed to be added to final dataset
+  dplyr::select(ID, Other, Self)
+
+#Merge EFA data with the rest of the data
+data <- merge(full_judgement_dataset, data, by=c("ID"))
+```
+
+# Descriptives
+
+## Exclusions
+
+```{r missing-data}
+exclusion_data <- data %>%
+  dplyr::select(ID, Age, Sex, Race, BMI, DRMneg_mean, DRMpos_mean, DRMpos_mean, ICCneg_fz_rev, ICCpos_fz_rev, ML1, Emo_Clarity, Differentiation, TAS_Describe, TAS_Identify, RegEfficacy, SNSreact, SNSrecover, RMSDDrecover, RMSDD_TSSTReact, cvRMSDD_TSSTReact, HR_TSSTReactBL, NegHiEmo, HiEmo, PosEmo, Somatic_mean, contains("Sit_"), contains("Emo"), contains("SS"), Other, Self)
+
+exclusion_data$FactorScore <- exclusion_data$ML1 #renaming complexity factor score column
+
+df_exclusions_ICCneg <- exclusion_data %>%
+  dplyr::filter(is.na(ICCneg_fz_rev == T))
+nrow(df_exclusions_ICCneg) #0 subjects missing ICC neg data
+
+df_exclusions_ICCpos <- exclusion_data %>%
+  filter(is.na(ICCpos_fz_rev == T))
+nrow(df_exclusions_ICCpos) #0 subjects missing ICC pos data
+
+df_exclusions_BMI <- exclusion_data %>%
+  filter(is.na(BMI == T))
+nrow(df_exclusions_BMI) #ID 24 doesn't have BMI info
+
+df_exclusions_SNS <- exclusion_data %>%
+  filter(is.na(SNSreact == T))
+nrow(df_exclusions_SNS) #50 subject missing PEP data - 21 subjects due to technical difficulties or poor quality data, 27 didn't complete S2, ID 24 doesn't have BMI info, 1 subject data missing
+
+#Creating final data set
+final_data <- exclusion_data %>%
+  dplyr::select(ID, Age, Sex, Race, BMI, DRMneg_mean, DRMpos_mean, DRMpos_mean, ICCneg_fz_rev, ICCpos_fz_rev, FactorScore, RegEfficacy, SNSreact, SNSrecover, RMSDDrecover, RMSDD_TSSTReact, cvRMSDD_TSSTReact, HR_TSSTReactBL, NegHiEmo, HiEmo, PosEmo, Somatic_mean, Self, Other) %>%
+  tidyr::drop_na()
+```
+
+
+```{r threat-challenge-prep}
+#Threat vs. challenge ratings
+threat_data <- data %>%
+  dplyr::select(ID, contains("Sit"))%>%
+  tidyr::drop_na() %>% #remove rows with missing data
+  dplyr::rowwise() %>% #perform computations by row
+  dplyr::mutate(Threat_mean= (Sit_Abandoned + Sit_BadNews + Sit_Cheated + Sit_Defeated + Sit_Disgraced + Sit_Failure + Sit_Incompetent + Sit_Insulted + Sit_Loss + Sit_Lonely + Sit_Mistaken + Sit_Offended + Sit_Overwhelmed +  Sit_Rejected + Sit_Threat + Sit_Thrwarted + Sit_Transgress + Sit_Uncertain + Sit_Unfair + Sit_Vulnerable)/20,
+         Challenged_mean= (Sit_Challenged + Sit_Unknown + Sit_Unresolved + Sit_Uneventful + Sit_Uninterested)/5) %>% #within-subject SDs for post-TSST "self" oriented appraisals
+  dplyr::ungroup()
+  
+#Merge with final data set
+final_data <- merge(final_data, threat_data, by=c("ID"))
+```
+
+
+```{r sd}
+#Within subject standard deviations for Post-TSST ratings
+sd_data <- data %>%
+  dplyr::select(ID, contains("Emo_"), contains("SS_"), contains("Sit"))%>%
+  tidyr::drop_na() %>% #remove rows with missing data
+  dplyr::rowwise() %>% #perform computations by row
+  dplyr::mutate(SD_Emo = sd(c(Emo_Happy, Emo_Sad, Emo_Activated, Emo_Sleepy, Emo_Afraid, Emo_Relaxed, Emo_Unhappy, Emo_Content, Emo_Quiet, Emo_Stressed, Emo_Guilty, Emo_Pleased, Emo_Angry, Emo_Amused, Emo_Annoyed, Emo_Frustrated, Emo_Bored, Emo_Irritiable, Emo_Panicky, Emo_Proud, Emo_Embarrassed, Emo_Weary, Emo_Hyperactive, Emo_Alert, Emo_Anxious, Emo_Disgusted, Emo_Excited, Emo_Distressed, Emo_Interested, Emo_Calm)), #for all post-TSST emo words
+         SD_NegEmo=sd(c(Emo_Sad, Emo_Sleepy, Emo_Afraid, Emo_Unhappy, Emo_Stressed, Emo_Guilty, Emo_Angry, Emo_Annoyed, Emo_Frustrated, Emo_Bored, Emo_Irritiable, Emo_Panicky, Emo_Embarrassed, Emo_Weary, Emo_Anxious, Emo_Disgusted, Emo_Distressed)), #for post-TSST negative emo words
+         SD_PosEmo=sd(c(Emo_Happy, Emo_Activated, Emo_Relaxed, Emo_Content, Emo_Quiet, Emo_Pleased, Emo_Amused, Emo_Proud, Emo_Hyperactive, Emo_Alert, Emo_Excited, Emo_Interested, Emo_Calm)), #for post-TSST positive emo words
+         SD_SS = sd(c(SS_HeartRateIncrease, SS_DiffBreathing, SS_Faint, SS_StomTense, SS_Shaky, SS_Sweaty, SS_Pale, SS_StomPit, SS_Red, SS_Butterflies, SS_Numb, SS_Powerful, SS_Sick, SS_Tense, SS_Sluggish, SS_Empty, SS_Drained, SS_Exhausted, SS_Headache, SS_Throb, SS_Fidgety, SS_Energized, SS_Shivering, SS_SpineTingle, SS_Pain, SS_Stiff, SS_Weak, SS_HeartPound, SS_Awake, SS_TightChest, SS_Weary, SS_Restless, SS_Jittery, SS_BloodPump, SS_Cold, SS_Goosebumps, SS_Heavy, SS_Hot, SS_HeartPalp, SS_usea, SS_Tingly, SS_Dizzy)), #for post-TSST somatic sensation words
+         SD_Sit=sd(c(Sit_Abandoned, Sit_BadNews, Sit_Challenged, Sit_Cheated, Sit_Defeated, Sit_Disgraced, Sit_Failure, Sit_Incompetent, Sit_Insulted, Sit_Loss, Sit_Lonely, Sit_Mistaken, Sit_Offended, Sit_Overwhelmed, Sit_Rejected, Sit_Threat, Sit_Thrwarted, Sit_Transgress, Sit_Uncertain, Sit_Uneventful, Sit_Unfair, Sit_Uninterested, Sit_Unknown, Sit_Unresolved, Sit_Vulnerable)), #for all post-TSST appraisals
+         SD_AppraiseOther= sd(c(Sit_Abandoned, Sit_Cheated,  Sit_Lonely, Sit_Rejected, Sit_Threat, Sit_Thrwarted, Sit_Transgress, Sit_Uneventful, Sit_Unresolved)), #for post-TSST "other" oriented appraisals
+         SD_AppraiseSelf = sd(c(Sit_Challenged, Sit_Defeated, Sit_Failure, Sit_Incompetent, Sit_Mistaken, Sit_Overwhelmed, Sit_Uncertain, Sit_Vulnerable))) %>% #for post-TSST "self" oriented appraisals
+  dplyr::ungroup()
+  
+```
+
+```{r cv}
+#Coefficient of variation for Post-TSST ratings
+cv_data <- sd_data %>%
+  tidyr::drop_na() %>% #remove rows with missing data
+  dplyr::rowwise() %>%  #perform computations by row
+  dplyr::mutate(CV_Emo= (c(SD_Emo)/mean(c(Emo_Happy, Emo_Sad, Emo_Activated, Emo_Sleepy, Emo_Afraid, Emo_Relaxed, Emo_Unhappy, Emo_Content, Emo_Quiet, Emo_Stressed, Emo_Guilty, Emo_Pleased, Emo_Angry, Emo_Amused, Emo_Annoyed, Emo_Frustrated, Emo_Bored, Emo_Irritiable, Emo_Panicky, Emo_Proud, Emo_Embarrassed, Emo_Weary, Emo_Hyperactive, Emo_Alert, Emo_Anxious, Emo_Disgusted, Emo_Excited, Emo_Distressed, Emo_Interested, Emo_Calm)) * 100),
+                CV_NegEmo = (c(SD_NegEmo)/mean(c(Emo_Sad, Emo_Sleepy, Emo_Afraid, Emo_Unhappy, Emo_Stressed, Emo_Guilty, Emo_Angry, Emo_Annoyed, Emo_Frustrated, Emo_Bored, Emo_Irritiable, Emo_Panicky, Emo_Embarrassed, Emo_Weary, Emo_Anxious, Emo_Disgusted, Emo_Distressed)) * 100), #for post-TSST negative emo words
+                CV_PosEmo= (c(SD_PosEmo)/mean(c(Emo_Happy, Emo_Activated, Emo_Relaxed, Emo_Content, Emo_Quiet, Emo_Pleased, Emo_Amused, Emo_Proud, Emo_Hyperactive, Emo_Alert, Emo_Excited, Emo_Interested, Emo_Calm)) * 100), #for post-TSST positive emo words
+                CV_SS = (c(SD_SS)/mean(c(SS_HeartRateIncrease, SS_DiffBreathing, SS_Faint, SS_StomTense, SS_Shaky, SS_Sweaty, SS_Pale, SS_StomPit, SS_Red, SS_Butterflies, SS_Numb, SS_Powerful, SS_Sick, SS_Tense, SS_Sluggish, SS_Empty, SS_Drained, SS_Exhausted, SS_Headache, SS_Throb, SS_Fidgety, SS_Energized, SS_Shivering, SS_SpineTingle, SS_Pain, SS_Stiff, SS_Weak, SS_HeartPound, SS_Awake, SS_TightChest, SS_Weary, SS_Restless, SS_Jittery, SS_BloodPump, SS_Cold, SS_Goosebumps, SS_Heavy, SS_Hot, SS_HeartPalp, SS_usea, SS_Tingly, SS_Dizzy)) * 100), #for post-TSST somatic sensation words
+                CV_Sit = (c(SD_Sit)/mean(c(Sit_Abandoned, Sit_BadNews, Sit_Challenged, Sit_Cheated, Sit_Defeated, Sit_Disgraced, Sit_Failure, Sit_Incompetent, Sit_Insulted, Sit_Loss, Sit_Lonely, Sit_Mistaken, Sit_Offended, Sit_Overwhelmed, Sit_Rejected, Sit_Threat, Sit_Thrwarted, Sit_Transgress, Sit_Uncertain, Sit_Uneventful, Sit_Unfair, Sit_Uninterested, Sit_Unknown, Sit_Unresolved, Sit_Vulnerable)) * 100), #or all post-TSST appraisals
+                CV_AppraiseOther = (c(SD_AppraiseOther)/mean(c(Sit_Abandoned, Sit_Cheated,  Sit_Lonely, Sit_Rejected, Sit_Threat, Sit_Thrwarted, Sit_Transgress, Sit_Uneventful, Sit_Unresolved)) * 100), #for post-TSST "other" oriented appraisals
+         CV_AppraiseSelf = (c(SD_AppraiseSelf)/mean(c(Sit_Challenged, Sit_Defeated, Sit_Failure, Sit_Incompetent, Sit_Mistaken, Sit_Overwhelmed, Sit_Uncertain, Sit_Vulnerable)) * 100)) %>% #for post-TSST "self" oriented appraisals
+  dplyr::ungroup() %>%
+  dplyr::select(-contains("Emo_"), -contains("SS_"), -contains("Sit")) %>%
+  dplyr::na_if(., "NaN")
+
+#Merge with final data set
+final_data <- merge(final_data, cv_data, by=c("ID"))
+
+```
+
+## Frequency of participants by race and sex
+
+```{r categorical-freq}
+summary(final_data$Race) #frequency by race 
+summary(final_data$Sex) #frequency of females and males
+```
+
+## Descriptives for variables of interest
+
+```{r descriptives}
+df_descriptives <- final_data %>%
+  dplyr::select("Age", "BMI", "DRMneg_mean", "DRMpos_mean", "ICCneg_fz_rev", "ICCpos_fz_rev", "RegEfficacy","SNSrecover", "RMSDDrecover", "RMSDD_TSSTReact", "cvRMSDD_TSSTReact", "SNSreact", "FactorScore", "HR_TSSTReactBL","NegHiEmo", "Somatic_mean", "PosEmo", "Self", "Other", "Threat_mean", "Challenged_mean", contains("SD_"), contains("CV_"))
+
+descriptives <- psych::describe(df_descriptives, skew = T, ranges = T)
+print(descriptives)
+
+#Printing histogram for continuous variables
+psych::multi.hist(df_descriptives, global = F) #Somatic_mean, Appraise_Other, & PosEmo are positively skewed
+
+df_descriptives <- df_descriptives %>%
+  dplyr::mutate(logOther = log10(Other + 1), #log-transforming to account for skew
+                logSomatic_mean  = log10(Somatic_mean + 1),
+                logPosEmo = log10(PosEmo + 1))
+
+psych::multi.hist(df_descriptives, global = F) #distribution looks more normal for logSomatic_mean and logPosEmo, but logOther still looks highly skewed
+
+#Adding log-transformed variables to final dataset
+final_data <- final_data %>%
+  dplyr::mutate(logOther = log10(Other + 1), 
+                logSomatic_mean  = log10(Somatic_mean + 1),
+                logPosEmo = log10(PosEmo + 1))
+```
+
+## Reliability
+
+```{r alphas}
+#Reliability for TAS20 Describe
+TASDescribe_alpha <- data %>%
+  dplyr::select(ID, contains("Describe")) 
+TASDescribe_alpha$TAS4_Describe = 6 - TASDescribe_alpha$TAS4_Describe_ToReverse #reverse scoring relevant items
+
+TASDescribe_alpha_calc <-psych::alpha(TASDescribe_alpha[,c("TAS2_Describe", "TAS11_Describe", "TAS12_Describe", "TAS17_Describe", "TAS4_Describe")], #computing reliability
+                                  keys = NULL, cumulative = F, 
+                                  na.rm = T, check.keys= F, delete = F, 
+                                  use = "pairwise")
+TASDescribe_alpha_summary <- TASDescribe_alpha_calc$total
+
+final_data$TASDescribe_alpha_raw <- TASDescribe_alpha_summary$raw_alpha #storing raw alpha in main dataset
+final_data$TASDescribe_alpha_std <- TASDescribe_alpha_summary$std.alpha #storing standard alpha in main dataset
+
+#Reliability for TAS20 Identify
+TASIdentify_alpha <- data %>%
+  dplyr::select(ID, contains("Identify"))
+
+TASIdentify_alpha_calc <-psych::alpha(TASIdentify_alpha[2:length(TASIdentify_alpha)], #computing reliability
+                                  keys = NULL, cumulative = F, 
+                                  na.rm = T, check.keys= F, delete = F, 
+                                  use = "pairwise")
+TASIdentify_alpha_summary <- TASIdentify_alpha_calc$total
+
+final_data$TASIdentify_alpha_raw <- TASIdentify_alpha_summary$raw_alpha #storing raw alpha in main dataset
+final_data$TASIdentify_alpha_std <- TASIdentify_alpha_summary$std.alpha #storing standard alpha in main dataset
+
+#Reliability for RDEES
+RDEES_alpha <- data %>%
+  dplyr::select(ID, RDEES1, RDEES2, RDEES3, RDEES4, RDEES5, RDEES6, RDEES7)
+
+RDEES_alpha_calc <-psych::alpha(RDEES_alpha[2:length(RDEES_alpha)], #computing reliability
+                                  keys = NULL, cumulative = F, 
+                                  na.rm = T, check.keys= F, delete = F, 
+                                  use = "pairwise")
+RDEES_alpha_summary <- RDEES_alpha_calc$total
+
+final_data$RDEES_alpha_raw <- RDEES_alpha_summary$raw_alpha #storing rawalpha in main dataset
+final_data$RDEES_alpha_std <- RDEES_alpha_summary$std.alpha #storing standard alpha in main dataset
+
+#Reliability for Emo_Clarity
+Emo_Clarity_alpha <- data %>%
+  dplyr::select(ID, EC1, EC2, EC3, EC4, EC5, EC6, EC7, EC8_ToReverse, EC9_ToReverse, EC10_ToReverse, EC11_ToReverse)
+
+Emo_Clarity_alpha_calc <-psych::alpha(Emo_Clarity_alpha[2:length(Emo_Clarity_alpha)], #computing reliability
+                                  keys = NULL, cumulative = F, 
+                                  na.rm = T, check.keys= T, delete = F, 
+                                  use = "pairwise")
+
+Emo_Clarity_alpha_summary <- Emo_Clarity_alpha_calc$total
+
+final_data$Emo_Clarity_alpha_raw <- Emo_Clarity_alpha_summary$raw_alpha #storing rawalpha in main dataset
+final_data$Emo_Clarity_alpha_std <- Emo_Clarity_alpha_summary$std.alpha #storing standard alpha in main dataset
+
+#Regulatory self-efficacy
+RegEff_alpha <- data %>%
+  dplyr::select(ID, RegEff1, RegEff2, RegEff3, RegEff4)
+
+RegEff_alpha_calc <- psych::alpha(RegEff_alpha[2:length(RegEff_alpha)], #computing relability
+                                    keys = NULL, cumulative = F, 
+                                  na.rm = T, check.keys= F, delete = F, 
+                                  use = "pairwise")
+
+RegEff_alpha_summary <- RegEff_alpha_calc$total
+final_data$RegEff_alpha_raw <- RegEff_alpha_summary$raw_alpha #storing rawalpha in main dataset
+final_data$RegEff_alpha_std <- RegEff_alpha_summary$std.alpha #storing standard alpha in main dataset
+
+#Negative high arousal emotion
+NegHiEmo_alpha <- data %>%
+  dplyr::select(ID, Emo_Activated, Emo_Afraid, Emo_Alert, Emo_Angry, Emo_Annoyed, Emo_Anxious, Emo_Disgusted, Emo_Distressed, Emo_Embarrassed, Emo_Frustrated, Emo_Guilty, Emo_Hyperactive, Emo_Irritiable, Emo_Panicky, Emo_Stressed)
+
+NegHiEmo_alpha_calc <- psych::alpha(NegHiEmo_alpha[2:length(NegHiEmo_alpha)], #computing relbiality
+                                    keys = NULL, cumulative = F, 
+                                  na.rm = T, check.keys= F, delete = F, 
+                                  use = "pairwise")
+
+NegHiEmo_alpha_summary <- NegHiEmo_alpha_calc$total
+final_data$NegHiEmo_alpha_raw <- NegHiEmo_alpha_summary$raw_alpha #storing rawalpha in main dataset
+final_data$NegHiEmo_alpha_std <- NegHiEmo_alpha_summary$std.alpha #storing standard alpha in main dataset
+
+SS_data <- data%>%
+  dplyr::select(ID, contains("SS_"), -HBD_miss_count)
+
+SS_alpha_calc <- psych::alpha(SS_data[2:length(SS_data)], keys= T, cumulative=F, na.rm=T, check.keys = F, delete=F, use="pairwise")
+
+SS_alpha_summary <- SS_alpha_calc$total
+final_data$SS_alpha_raw <-SS_alpha_summary$raw_alpha
+final_data$SS_alpha_std <-SS_alpha_summary$std.alpha
+```
+
+# Bivariate correlations between variables of interest
+
+```{r correlations}
+corr_small<- final_data %>%
+  dplyr::select("FactorScore", "DRMneg_mean", "DRMpos_mean", "ICCneg_fz_rev", "ICCpos_fz_rev", "SNSreact", "NegHiEmo")
+
+apaTables::apa.cor.table(corr_small, table.number = NA, show.conf.interval = FALSE, show.sig.stars = TRUE, landscape = FALSE)
+```
+
+# Hierachical regressions analyses for main manuscript
+
+```{r regression-prep}
+#Centering predictors and standardizing interaction terms
+final_data <- final_data %>%
+  dplyr::mutate(Age_c = scale(Age, center = T, scale = F),
+                BMI_c = scale(BMI, center = T, scale = F),
+                DRMneg_mean_c = scale(DRMneg_mean, center = T, scale =F),
+                DRMpos_mean_c = scale(DRMneg_mean, center = T, scale=F),
+                FactorScore_c = scale(FactorScore, center = T, scale = F),
+                RegEfficacy_z = scale(RegEfficacy, center =T, scale =T),
+                Threat_mean_z = scale(Threat_mean, center = F, scale = T),
+                Challenged_mean_z = scale(Challenged_mean, center = F, scale = T),
+                SNSreact_z = scale(SNSreact, center = F, scale = T),
+                SNSrecover_z = scale(SNSrecover, center = F, scale =T),
+                RMSDDreact_z = scale(cvRMSDD_TSSTReact, center = F, scale = T),
+                RMSDDrecover_z = scale(RMSDDrecover, center= F, scale = T))
+```
+
+
+```{r diagnositc-func}
+#Making function for diagnostics; function adapted from Feldman, M.J., MacCormack, J.K., Bonar, A.S., and Lindquist, K.A. (2021). Interoceptive ability moderates the effect of physiological reactivity on social judgment https://osf.io/8ys5a/
+
+model_diagnose_params <- function(mod, n, Data){
+  model_params <- as.data.frame(matrix(nrow = n, ncol = 1))
+  model_params$V1 <- Data[["ID"]]
+  model_params$Res <- mod[["residuals"]]
+  model_params$Pred <- mod[["fitted.values"]]  
+  model_params$StudDelRes <- rstudent(mod)
+  model_params$StanDelRes <- rstandard(mod)
+  model_params$HatVals <- hatvalues(mod)
+  model_params$Cooks <- cooks.distance(mod)
+  model_params$DFFITS <- dffits(mod)
+  
+
+  print("checking for multicollinearity (with caution due to interaction terms). 
+        Look for values >5 and >10.")
+  print(vif(mod))
+  
+  print("Evaluating the assumption that the unique effect of each predictor on the outcome is linear")
+  avPlots(mod, grid=T, main = "Partial Regression Plots")
+  qqPlot(mod, main = "QQ Plot")
+  print("Evaluating the assumptions of normality and homoscedasticity (constant variance) 
+        for the residuals")
+  print("check to see whether datapoints are distributed evenly above and below the mean 
+        and across th horizontal axis (no funnel)")
+  print(ggplot(data = model_params, aes(x = Pred, y = Res)) +
+  geom_point() + geom_hline(yintercept = 0, linetype = "dashed") + 
+  xlab("predicted values") + ylab("residuals") +
+  labs(title = "Residuals ~ Fitted values") +
+  theme(plot.title = element_text(hjust = 0.5)))
+  
+  print("Identifying any cases with residuals that are large enough to be of 
+        potential concern, > |3|")
+  print(model_params[which(abs(model_params$StudDelRes) > 3),])
+  
+  residPLOT <- ggplot(data = model_params, 
+                      mapping = aes(x = V1, y = abs(StudDelRes))) + geom_point() +
+    geom_segment(aes (x = V1, y = 0, xend = V1, yend = abs(StudDelRes))) + 
+    geom_hline(yintercept = 3, color = "red", linetype = "dashed") + 
+    labs(title = "Large Residuals?") + xlab(NULL)
+  
+  print("Identify any cases with moderately concerning leverage, > 0.2 and < 0.5")
+  print(model_params[which(model_params$HatVals > 0.2 & model_params$HatVals < 0.5),] )
+  print("Identify any cases with very concerning leverage, > 0.5")
+  print(model_params[which(model_params$HatVals > 0.5),])
+  
+  
+  LevPlot <- ggplot(data = model_params, mapping = aes(x = V1, y = HatVals)) + 
+    geom_point() + geom_segment(aes (x = V1, y = 0, xend = V1, yend = HatVals)) + 
+    geom_hline(yintercept = 0.2, color = "orange", linetype = "dashed") +
+    geom_hline(yintercept = 0.5, color = "red", linetype = "dashed") + 
+    labs(title = "High Leverage?") + xlab(NULL)
+  
+  print("Determining if any cases may be having undue influence on results, 
+  both with respect to the entire model and with respect to specific
+  regression coefficient estimates.")
+  cutoff <- qf(.1, 7, (nrow(model_params)-7), lower.tail = T) 
+  print((model_params[which(model_params$Cooks > cutoff),] ))
+  
+  
+  InfPlot <- ggplot(data = model_params, mapping = aes(x = V1, y = Cooks)) + 
+    geom_point() + geom_segment(aes (x = V1, y = 0, xend = V1, yend = Cooks)) + 
+    geom_hline(yintercept = cutoff, color = "red", linetype = "dashed") + 
+    labs(title = "High Influence?") + xlab(NULL)
+  
+  print(ggpubr::ggarrange(residPLOT, LevPlot, InfPlot, nrow = 3))
+  
+  print("lm function for plotting cooks distance")
+  plot(mod, which = 5)
+}
+
+```
+
+## MODERATIONS: Granularity and physio reactivity predicting rating intensity
+
+### Regressions for Model 1a: Granularity and SNS reactivity on NegHi emotion
+
+```{r reg-1a}
+#Regressions for Model 1a: Negative granularity and SNS reactivity on NegHi emotion
+NegHiMod1.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev, data= final_data)
+NegHiMod1.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
+NegHiMod1.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
+NegHiMod1.4 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Sex + Age_c + BMI_c + DRMneg_mean_c, data= final_data)
+NegHiMod1.5 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + SNSreact_z + FactorScore + Sex + Age_c + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(NegHiMod1.1) #results summaries
+summary(NegHiMod1.2)
+summary(NegHiMod1.3)
+summary(NegHiMod1.4)
+summary(NegHiMod1.5)
+
+table3a <- apa.reg.table(NegHiMod1.1, NegHiMod1.2, NegHiMod1.3, NegHiMod1.4, filename = "/Users/adriennebonar/Desktop/datasets/table3a.doc", table.number = 3)$table_body #model comparison table
+
+```
+
+```{r reg-1a-pos} 
+#Regressions for Positive granularity and SNS reactivity on NegHi emotion
+NegHiMod1.5 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev, data= final_data)
+NegHiMod1.6 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + SNSreact_z, data= final_data)
+NegHiMod1.7 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev * SNSreact_z, data= final_data) 
+NegHiMod1.8 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev * SNSreact_z + FactorScore + Sex + Age_c + BMI_c + DRMpos_mean_c, data= final_data)
+NegHiMod1.9 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + SNSreact_z + FactorScore + Sex + Age_c + BMI_c + DRMpos_mean_c, data= final_data)
+
+summary(NegHiMod1.5) #results summaries
+summary(NegHiMod1.6)
+summary(NegHiMod1.7)
+summary(NegHiMod1.8)
+summary(NegHiMod1.9)
+
+table3b <- apa.reg.table(NegHiMod1.5, NegHiMod1.6, NegHiMod1.7, NegHiMod1.8, filename = "/Users/adriennebonar/Desktop/datasets/table3b.doc", table.number = 4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model1a-pos-diagnositc}
+model_diagnose_params(NegHiMod1.8, 180, final_data)
+```
+
+### Regressions for Model 1b: Granularity and SNS reactivity on somatic intensity
+
+```{r reg-1b}
+#Regressions for Model 1b: Negative granularity and SNS reactivity on somatic intensity rating mean
+SomMod1.1 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev, data= final_data)
+SomMod1.2 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
+SomMod1.3 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
+SomMod1.4 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SomMod1.1) #results summaries
+summary(SomMod1.2)
+summary(SomMod1.3)
+summary(SomMod1.4)
+
+table4a <- apa.reg.table(SomMod1.1, SomMod1.2, SomMod1.3, SomMod1.4, filename = "/Users/adriennebonar/Desktop/datasets/table4a.doc", table.number = 4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model1b-diagnositc}
+model_diagnose_params(SomMod1.4, 180, final_data) #consider running model with IDs 186, 86, 118, and 160 removed
+```
+
+
+```{r reg-1b-pos}
+#Positive granularity and SNS reactivity on somatic intensity rating mean
+SomMod1.5 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev, data= final_data)
+SomMod1.6 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev + SNSreact_z, data= final_data)
+SomMod1.7 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev * SNSreact_z, data= final_data) 
+SomMod1.8 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMpos_mean_c, data= final_data)
+
+summary(SomMod1.5) #results summaries
+summary(SomMod1.6)
+summary(SomMod1.7)
+summary(SomMod1.8)
+
+apa.reg.table(SomMod1.5, SomMod1.6, SomMod1.7, SomMod1.8)$table_body #model comparison table
+table4b <- apa.reg.table(SomMod1.5, SomMod1.6, SomMod1.7, SomMod1.8, filename = "/Users/adriennebonar/Desktop/datasets/table4b.doc", table.number = 4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model1b-pos-diagnositc}
+model_diagnose_params(SomMod1.8, 180, final_data) 
+```
+
+### Regressions for Model 1c: Granularity and SNS reactivity on Other-focused Neg Appraisals
+
+```{r reg-1c}
+#Regressions for Model 1d: Negative granularity and SNS reactivity on other appraisals - normal GLM
+OtherMod1.1 <- lm(formula = Other ~ ICCneg_fz_rev, data= final_data)
+OtherMod1.2 <- lm(formula = Other ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
+OtherMod1.3 <- lm(formula = Other ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
+OtherMod1.4 <- lm(formula = Other ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(OtherMod1.1) #results summaries
+summary(OtherMod1.2)
+summary(OtherMod1.3)
+summary(OtherMod1.4)
+
+apa.reg.table(OtherMod1.1, OtherMod1.2, OtherMod1.3, OtherMod1.4)$table_body #model comparison table
+```
+
+
+```{r}
+#Positive granularity and SNS reactivity on other appraisals - normal GLM
+OtherMod1.5 <- lm(formula = Other ~ ICCpos_fz_rev, data= final_data)
+OtherMod1.6 <- lm(formula = Other ~ ICCpos_fz_rev + SNSreact_z, data= final_data)
+OtherMod1.7 <- lm(formula = Other ~ ICCpos_fz_rev * SNSreact_z, data= final_data) 
+OtherMod1.8 <- lm(formula = Other ~ ICCpos_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMpos_mean_c, data= final_data)
+
+summary(OtherMod1.5) #results summaries
+summary(OtherMod1.6)
+summary(OtherMod1.7)
+summary(OtherMod1.8)
+
+apa.reg.table(OtherMod1.5, OtherMod1.6, OtherMod1.7, OtherMod1.8)$table_body #model comparison table
+```
+
+### Regressions for Model 1d: Granularity and SNS reactivity on Self-focused Neg Appraisals
+
+```{r reg-1d}
+#Regressions for Model 1d: Negative granularity and SNS reactivity on self appraisals
+SelfMod1.1 <- lm(formula = Self ~ ICCneg_fz_rev, data= final_data)
+SelfMod1.2 <- lm(formula = Self ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
+SelfMod1.3 <- lm(formula = Self ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
+SelfMod1.4 <- lm(formula = Self ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SelfMod1.1) #results summaries
+summary(SelfMod1.2)
+summary(SelfMod1.3)
+summary(SelfMod1.4)
+
+apa.reg.table(SelfMod1.1, SelfMod1.2, SelfMod1.3, SelfMod1.4)$table_body #model comparison table
+```
+
+```{r}
+#Positive granularity and SNS reactivity on self appraisals
+SelfMod1.5 <- lm(formula = Self ~ ICCpos_fz_rev, data= final_data)
+SelfMod1.6 <- lm(formula = Self ~ ICCpos_fz_rev + SNSreact_z, data= final_data)
+SelfMod1.7 <- lm(formula = Self ~ ICCpos_fz_rev * SNSreact_z, data= final_data) 
+SelfMod1.8 <- lm(formula = Self ~ ICCpos_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMpos_mean_c, data= final_data)
+
+summary(SelfMod1.5) #results summaries
+summary(SelfMod1.6)
+summary(SelfMod1.7)
+summary(SelfMod1.8)
+
+apa.reg.table(SelfMod1.5, SelfMod1.6, SelfMod1.7, SelfMod1.8)$table_body #model comparison table
+```
+
+### Regressions for Model 2a: Granularity and HRV reactivity on NegHi emotion
+
+```{r reg-2a}
+#Regressions for Model 2a: Negative granularity and corrected HRV reactivity on NegHi emotion
+NegHiMod2.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev, data= final_data)
+NegHiMod2.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
+NegHiMod2.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
+NegHiMod2.4 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(NegHiMod2.1) #results summaries
+summary(NegHiMod2.2)
+summary(NegHiMod2.3)
+summary(NegHiMod2.4)
+
+apa.reg.table(NegHiMod2.1, NegHiMod2.2, NegHiMod2.3, NegHiMod2.4)$table_body #model comparison table
+```
+
+
+```{r reg-2a-pos}
+#Positive granularity and corrected HRV reactivity on NegHi emotion
+NegHiMod2.5 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev, data= final_data)
+NegHiMod2.6 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + RMSDDreact_z, data= final_data)
+NegHiMod2.7 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev * RMSDDreact_z, data= final_data) 
+NegHiMod2.8 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev * RMSDDreact_z + FactorScore + Sex + BMI_c + DRMpos_mean_c, data= final_data)
+
+summary(NegHiMod2.5) #results summaries
+summary(NegHiMod2.6)
+summary(NegHiMod2.7)
+summary(NegHiMod2.8)
+
+apa.reg.table(NegHiMod2.5, NegHiMod2.6, NegHiMod2.7, NegHiMod2.8)$table_body #model comparison table
+```
+
+
+### Regressions for Model 2b: Granularity and HRV reactivity on somatic intensity
+
+```{r reg-2b}
+#Regressions for Model 2b: Negative granularity and corrected HRV reactivity on somatic intensity
+SomMod2.1 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev, data= final_data)
+SomMod2.2 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
+SomMod2.3 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
+SomMod2.4 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SomMod2.1) #results summaries
+summary(SomMod2.2)
+summary(SomMod2.3)
+summary(SomMod2.4)
+
+apa.reg.table(SomMod2.1, SomMod2.2, SomMod2.3, SomMod2.4)$table_body #model comparison table
+```
+
+***you stopped editing here
+```{r}
+#Positive granularity and corrected HRV reactivity on somatic intensity
+SomMod2.1 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev, data= final_data)
+SomMod2.2 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
+SomMod2.3 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
+SomMod2.4 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SomMod2.1) #results summaries
+summary(SomMod2.2)
+summary(SomMod2.3)
+summary(SomMod2.4)
+
+apa.reg.table(SomMod2.1, SomMod2.2, SomMod2.3, SomMod2.4)$table_body #model comparison table
+```
+
+
+### Regressions for Model 2c: Negative granularity and HRV reactivity on self-focused appraisals - SIG FACTOR SCORE
+
+```{r reg-2c}
+#Regressions for Model 2c: Negative granularity and corrected HRV reactivity on self-focused appraisals
+SelfMod2.1 <- lm(formula = Self ~ ICCneg_fz_rev, data= final_data)
+SelfMod2.2 <- lm(formula = Self ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
+SelfMod2.3 <- lm(formula = Self ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
+SelfMod2.4 <- lm(formula = Self ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SelfMod2.1) #results summaries
+summary(SelfMod2.2)
+summary(SelfMod2.3)
+summary(SelfMod2.4)
+
+apa.reg.table(SelfMod2.1, SelfMod2.2, SelfMod2.3, SelfMod2.4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model2c-diagnostic}
+model_diagnose_params(SelfMod2.4, 180, final_data)
+```
+
+## MODERATIONS: Negative granularity and physio reactivity predicting rating specificity
+
+### Regressions for Model 3a: Negative granularity and SNS reactivity on Neg emo specificity
+
+```{r reg-3a}
+#Regressions for Model 3a: Negative granularity and SNS reactivity on Neg emo specificity
+SDNegMod3.1 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev, data= final_data)
+SDNegMod3.2 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
+SDNegMod3.3 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
+SDNegMod3.4 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SDNegMod3.1) #results summaries
+summary(SDNegMod3.2)
+summary(SDNegMod3.3)
+summary(SDNegMod3.4)
+
+apa.reg.table(SDNegMod3.1, SDNegMod3.2, SDNegMod3.3, SDNegMod3.4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model3a-diagnostic}
+model_diagnose_params(SDNegMod3.4, 180, final_data)
+```
+
+### Regressions for Model 3b: Negative granularity and SNS reactivity on somatic specificity
+
+```{r reg-3b}
+#Regressions for Model 3b: Negative granularity and SNS reactivity on somatic specificity
+SDSomMod3.1 <- lm(formula = SD_SS ~ ICCneg_fz_rev, data= final_data)
+SDSomMod3.2 <- lm(formula = SD_SS ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
+SDSomMod3.3 <- lm(formula = SD_SS ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
+SDSomMod3.4 <- lm(formula = SD_SS ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SDSomMod3.1) #results summaries
+summary(SDSomMod3.2)
+summary(SDSomMod3.3)
+summary(SDSomMod3.4)
+
+apa.reg.table(SDSomMod3.1, SDSomMod3.2, SDSomMod3.3, SDSomMod3.4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model3b-diagnostic}
+model_diagnose_params(SDSomMod3.4, 180, final_data)
+```
+
+### Regressions for Model 3c: Negative granularity and SNS reactivity on appraisal specificity
+
+```{r reg-3c}
+#Regressions for Model 3c: Negative granularity and SNS reactivity on appraisal specificity
+SDSitMod3.1 <- lm(formula = SD_Sit ~ ICCneg_fz_rev, data= final_data)
+SDSitMod3.2 <- lm(formula = SD_Sit ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
+SDSitMod3.3 <- lm(formula = SD_Sit ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
+SDSitMod3.4 <- lm(formula = SD_Sit ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SDSitMod3.1) #results summaries
+summary(SDSitMod3.2)
+summary(SDSitMod3.3)
+summary(SDSitMod3.4)
+
+apa.reg.table(SDSitMod3.1, SDSitMod3.2, SDSitMod3.3, SDSitMod3.4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model3c-diagnostic}
+model_diagnose_params(SDSitMod3.4, 180, final_data)
+```
+
+### Regressions for Model 4a: Negative granularity and HRV reactivity on Neg emo specificity
+
+```{r reg-4a}
+#Regressions for Model 4a: Negative granularity and HRV reactivity on Neg emo specificity
+SDNegMod4.1 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev, data= final_data)
+SDNegMod4.2 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
+SDNegMod4.3 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
+SDNegMod4.4 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SDNegMod4.1) #results summaries
+summary(SDNegMod4.2)
+summary(SDNegMod4.3)
+summary(SDNegMod4.4)
+
+apa.reg.table(SDNegMod4.1, SDNegMod4.2, SDNegMod4.3, SDNegMod4.4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model4a-diagnostic}
+model_diagnose_params(SDNegMod4.4, 180, final_data)
+```
+
+### Regressions for Model 4b: Negative granularity and HRV reactivity on somatic specificity
+
+```{r reg-4b}
+#Regressions for Model 4b: Negative granularity and HRV reactivity on somatic specificity
+SDSSMod4.1 <- lm(formula = SD_SS ~ ICCneg_fz_rev, data= final_data)
+SDSSMod4.2 <- lm(formula = SD_SS ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
+SDSSMod4.3 <- lm(formula = SD_SS ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
+SDSSMod4.4 <- lm(formula = SD_SS ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SDSSMod4.1) #results summaries
+summary(SDSSMod4.2)
+summary(SDSSMod4.3)
+summary(SDSSMod4.4)
+
+apa.reg.table(SDSSMod4.1, SDSSMod4.2, SDSSMod4.3, SDSSMod4.4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model4b-diagnostic}
+model_diagnose_params(SDSSMod4.4, 180, final_data)
+```
+
+### Regressions for Model 4c: Negative granularity and HRV reactivity on neg appraisal specificity
+
+```{r reg-4c}
+#Regressions for Model 4c: Negative granularity and HRV reactivity on  appraisal specificity
+SDSitMod4.1 <- lm(formula = SD_Sit ~ ICCneg_fz_rev, data= final_data)
+SDSitMod4.2 <- lm(formula = SD_Sit ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
+SDSitMod4.3 <- lm(formula = SD_Sit ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
+SDSitMod4.4 <- lm(formula = SD_Sit ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(SDSitMod4.1) #results summaries
+summary(SDSitMod4.2)
+summary(SDSitMod4.3)
+summary(SDSitMod4.4)
+
+apa.reg.table(SDSitMod4.1, SDSitMod4.2, SDSitMod4.3, SDSitMod4.4)$table_body #model comparison table
+```
+
+#### Model Diagnostics
+
+```{r model4c-diagnostic}
+model_diagnose_params(SDSitMod4.4, 180, final_data)
+```
+
+
+## MODERATIONS: Negative granularity, physio reactivity,and threat v. challenge
+
+```{r reg-5a}
+#Regressions for Model 5a: Negative granularity, threat, and SNS on NegHi emotion
+TMod5.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev, data= final_data)
+TMod5.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Threat_mean_z, data= final_data)
+TMod5.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Threat_mean_z + SNSreact_z, data= final_data)
+TMod5.4 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * Threat_mean_z * SNSreact_z, data= final_data) 
+TMod5.5 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * Threat_mean_z * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(TMod5.1) #results summaries
+summary(TMod5.2)
+summary(TMod5.3)
+summary(TMod5.4)
+summary(TMod5.5)
+
+apa.reg.table(TMod5.1, TMod5.2, TMod5.3, TMod5.4,TMod5.5)$table_body #model comparison table
+```
+
+
+```{r reg-5b}
+#Regressions for Model 5b: Negative granularity, challenged, and SNS on NegHi emotion
+CMod5.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev, data= final_data)
+CMod5.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Challenged_mean_z, data= final_data)
+CMod5.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Challenged_mean_z + SNSreact_z, data= final_data)
+CMod5.4 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * Challenged_mean_z * SNSreact_z, data= final_data) 
+CMod5.5 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * Challenged_mean_z * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+
+summary(CMod5.1) #results summaries
+summary(CMod5.2)
+summary(CMod5.3)
+summary(CMod5.4)
+summary(CMod5.5)
+
+apa.reg.table(CMod5.1, CMod5.2, CMod5.3, CMod5.4,CMod5.5)$table_body #model comparison table
+```
+
+## Plots
+```{r reg-plot}
+#Plot for Model 1a
+NegHiPlot <- ggplot(data=NegHiMod1.4, aes(x=ICCneg_fz_rev, y=NegHiEmo))+
+  geom_point(colour= "black", size = 2) + 
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 8)) + scale_y_continuous(breaks = scales::pretty_breaks(n = 8))+ 
+  geom_smooth(method="lm", colour= "royalblue4", fill="royalblue4") + labs(x="Negative Emotional Granularity", y="Negative High Arousal Emotion Ratings") +  theme(plot.title = element_text(face="bold", hjust = 0.5), axis.title.x = element_text(face="bold"), axis.title.y = element_text(face="bold"), panel.background = element_rect(fill ="white", colour = "black"), axis.ticks.length.y = unit(.1, "cm"),axis.ticks.length.x = unit(-.1, "cm"))
+NegHiPlot #printing plot
+
+#Save plot
+ggsave("~/Desktop/plot.pdf", plot = last_plot(), device = "pdf", height = 8, width = 8)
+```
+
+## MEDIATIONS: Negative granularity and physio reactivity predicting rating intensity
+
+```{r mediate-prep}
+mediation_data <- final_data %>%
+  dplyr::select(ID, ICCneg_fz_rev, SNSreact, cvRMSDD_TSSTReact, logSomatic_mean, Threat_mean, Challenged_mean, NegHiEmo, SD_NegEmo, SD_SS) %>%
+  dplyr::mutate(SNSreact_z = scale(SNSreact, center = F, scale = T),
+                RMSDDreact_z = scale(cvRMSDD_TSSTReact, center = F, scale = T),
+                Threat_mean_z = scale(Threat_mean, center = F, scale = T),
+                Challenged_mean_z = scale(Challenged_mean, center = F, scale = T),)
+```
