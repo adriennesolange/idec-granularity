@@ -167,25 +167,25 @@ data <- as.data.frame(data)
 
 ```{r, efa-complexity-describe}
 efa_means_dataset <- data %>%
-  dplyr::select(ICCneg_fz_rev, ICCpos_fz_rev, Differentiation, Emo_Clarity, TAS_Describe, TAS_Identify)
+  dplyr::select(ID, ICCneg_fz_rev, ICCpos_fz_rev, Differentiation, Emo_Clarity, TAS_Describe, TAS_Identify)
 
-psych::describe(efa_means_dataset, fast = FALSE)
-psych::multi.hist(efa_means_dataset) #printing histograms to check the distribution of responses per item
-lowerCor(efa_means_dataset, digits=2) #looking at bivariate correlations among items
+psych::describe(efa_means_dataset[2:length(efa_means_dataset)], fast = FALSE)
+psych::multi.hist(efa_means_dataset[2:length(efa_means_dataset)]) #printing histograms to check the distribution of responses per item
+lowerCor(efa_means_dataset[2:length(efa_means_dataset)], digits=2) #looking at bivariate correlations among items
 ```
 
 ### Scree plot
 
 ```{r, efa-complexity-enumeration}
 #Checking suitability of data for Factor Analysis
-parameters::check_factorstructure(efa_means_dataset)
+parameters::check_factorstructure(efa_means_dataset[2:length(efa_means_dataset)])
 
 #Checking for number of factors
-factors <- n_factors(efa_means_dataset)
-psych::scree(efa_means_dataset, factors = T) #generating a scree.plot of the eigenvalues
+factors <- n_factors(efa_means_dataset[2:length(efa_means_dataset)])
+psych::scree(efa_means_dataset[2:length(efa_means_dataset)], factors = T) #generating a scree.plot of the eigenvalues
 
 #Running parallel analysis
-parallel <- fa.parallel(efa_means_dataset, fa='pc') 
+parallel <- fa.parallel(efa_means_dataset[2:length(efa_means_dataset)], fa='pc') 
 
 #Creating a data frame from observed eigenvalues in 'parallel'
 eigen <- data.frame(parallel$fa.values)
@@ -199,20 +199,15 @@ colnames(eigen) <-c('eigenvalue', 'factor number')
 
 ```{r, efa-complexity-extraction}
 #Performing EFA with 1 factor using maximum likelihood with promax rotation 
-params_1promax <- psych::fa(efa_means_dataset, nfactors = 1, rotate = "promax", fm= "ml") %>% 
-model_parameters(sort = FALSE, threshold = 0.30)
-summary_1promax <- fa(efa_means_dataset, nfactors= 1, rotate= 'promax', fm='ml')
-print(summary_1promax) #fit indices suggest okay model fit
+fa1 <- fa(efa_means_dataset[2:length(efa_means_dataset)], nfactors= 1, rotate= 'promax', fm='ml', scores = "regression")
+print(fa1) #fit indices suggest okay model fit
 
 #Running same model but dropping ICCpos and ICCneg
-params_1promax <- psych::fa(efa_means_dataset %>% dplyr::select(-contains("ICC")), nfactors = 1, rotate = "promax", fm= "ml") %>% 
-model_parameters(sort = FALSE, threshold = 0.30)
-summary_1promax <- fa(efa_means_dataset %>% dplyr::select(-contains("ICC")), nfactors= 1, rotate= 'promax', fm='ml')
-print(summary_1promax) #fit indices are worse
+fa2 <- fa(efa_means_dataset[2:length(efa_means_dataset)] %>% dplyr::select(-contains("ICC")), nfactors= 1, rotate= 'promax', fm='ml', scores = "regression")
+print(fa2) #fit indices are worse
 
-#Get factor scores
-fs <- factor.scores(efa_means_dataset, summary_1promax, method = c("regression")) #getting the factor scores #getting the factor scores
-fs <- fs$scores 
+#Getting factor scores
+fs <- fa1$scores 
 full_efa_dataset <- cbind(fs, efa_means_dataset[1])
 
 #Merge EFA data with the rest of the data
@@ -230,8 +225,6 @@ judgement_dataset <- data %>%
 psych::describe(judgement_dataset[2:26], fast = FALSE) 
 psych::multi.hist(judgement_dataset[2:26]) #printing histograms to check the distribution of responses per item; several items aren't normally distributed
 
-judge_corr <- correlation(judgement_dataset[2:26])
-summary(judge_corr) #correlation matrix
 ```
 
 ### Scree Plot
@@ -258,22 +251,23 @@ colnames(eigen) <-c('eigenvalue', 'factor number')
 ### EFA/CFA Results
 
 ```{r efa-appraise-extraction}
-#Performing EFA with 2 factors using weighted least squares
-fa1 <- psych::fa(judgement_dataset[2:26], nfactors = 2, rotate = "promax", fm= "wls") 
-print(fa1)
+#Performing EFA with 2 factors using weighted least squares 
+fa3 <- psych::fa(judgement_dataset[2:26], nfactors = 2, rotate = "promax", fm= "wls")
+print(fa3) 
 
-#CFA with diagonally weighted least squares
-model <- 'Other=~ Sit_Abandoned + Sit_Cheated +  Sit_Lonely + Sit_Rejected + Sit_Threat + Sit_Thrwarted + Sit_Transgress + Sit_Uneventful + Sit_Unresolved 
-          Self=~ Sit_Challenged + Sit_Defeated + Sit_Failure + Sit_Incompetent + Sit_Mistaken + Sit_Overwhelmed + Sit_Uncertain + Sit_Vulnerable'
+judgement_dataset_temp <- judgement_dataset %>%
+  dplyr::select(-(Sit_BadNews), -(Sit_Loss), -(Sit_Disgraced))
 
-fit.dwls <- lavaan::cfa(model, data= judgement_dataset[2:26], estimator = "DWLS")
-summary(fit.dwls, fit.measures = TRUE)
+#Re-running EFA with 2 factors using maximum likelihood vs. weighted least squares 
+fa4 <- psych::fa(judgement_dataset_temp[2:23], nfactors = 2, rotate = "promax", fm= "ml") 
+print(fa4) 
+
+fa4a <- psych::fa(judgement_dataset_temp[2:23], nfactors = 2, rotate = "promax", fm= "wls", scores = "regression")
+print(fa4a) 
 
 #Getting factor scores
-cfas <- lavPredict(fit.dwls, method= "Bartlett")
-full_judgement_dataset <- cbind(judgement_dataset, cfas)
-full_judgement_dataset <- full_judgement_dataset %>% #selecting only the variables that needed to be added to final dataset
-  dplyr::select(ID, Other, Self)
+fs2 <- fa4a$scores 
+full_judgement_dataset <- cbind(fs2, judgement_dataset[1])
 
 #Merge EFA data with the rest of the data
 data <- merge(full_judgement_dataset, data, by=c("ID"))
@@ -285,9 +279,11 @@ data <- merge(full_judgement_dataset, data, by=c("ID"))
 
 ```{r missing-data}
 exclusion_data <- data %>%
-  dplyr::select(ID, Age, Sex, Race, BMI, DRMneg_mean, DRMpos_mean, DRMpos_mean, ICCneg_fz_rev, ICCpos_fz_rev, ML1, Emo_Clarity, Differentiation, TAS_Describe, TAS_Identify, RegEfficacy, SNSreact, SNSrecover, RMSDDrecover, RMSDD_TSSTReact, cvRMSDD_TSSTReact, HR_TSSTReactBL, NegHiEmo, HiEmo, PosEmo, Somatic_mean, contains("Sit_"), contains("Emo"), contains("SS"), Other, Self)
+  dplyr::select(ID, Age, Sex, Race, BMI, DRMneg_mean, DRMpos_mean, DRMpos_mean, ICCneg_fz_rev, ICCpos_fz_rev, ML1, Emo_Clarity, Differentiation, TAS_Describe, TAS_Identify, RegEfficacy, SNSreact, SNSrecover, RMSDDrecover, RMSDD_TSSTReact, cvRMSDD_TSSTReact, HR_TSSTReactBL, NegHiEmo, HiEmo, PosEmo, Somatic_mean, contains("Sit_"), contains("Emo"), contains("SS"), WLS1, WLS2)
 
-exclusion_data$FactorScore <- exclusion_data$ML1 #renaming complexity factor score column
+exclusion_data$Complexity <- exclusion_data$ML1 #renaming complexity factor score column
+exclusion_data$OtherBlame <- exclusion_data$WLS1 #renaming complexity factor score column
+exclusion_data$SelfBlame <- exclusion_data$WLS2 #renaming complexity factor score column
 
 df_exclusions_ICCneg <- exclusion_data %>%
   dplyr::filter(is.na(ICCneg_fz_rev == T))
@@ -307,63 +303,10 @@ nrow(df_exclusions_SNS) #50 subject missing PEP data - 21 subjects due to techni
 
 #Creating final data set
 final_data <- exclusion_data %>%
-  dplyr::select(ID, Age, Sex, Race, BMI, DRMneg_mean, DRMpos_mean, DRMpos_mean, ICCneg_fz_rev, ICCpos_fz_rev, FactorScore, RegEfficacy, SNSreact, SNSrecover, RMSDDrecover, RMSDD_TSSTReact, cvRMSDD_TSSTReact, HR_TSSTReactBL, NegHiEmo, HiEmo, PosEmo, Somatic_mean, Self, Other) %>%
+  dplyr::select(ID, Age, Sex, Race, BMI, DRMneg_mean, DRMpos_mean, DRMpos_mean, ICCneg_fz_rev, ICCpos_fz_rev, Complexity, RegEfficacy, SNSreact, SNSrecover, RMSDDrecover, RMSDD_TSSTReact, cvRMSDD_TSSTReact, HR_TSSTReactBL, NegHiEmo, HiEmo, PosEmo, Somatic_mean, OtherBlame, SelfBlame) %>%
   tidyr::drop_na()
 ```
 
-
-```{r threat-challenge-prep}
-#Threat vs. challenge ratings
-threat_data <- data %>%
-  dplyr::select(ID, contains("Sit"))%>%
-  tidyr::drop_na() %>% #remove rows with missing data
-  dplyr::rowwise() %>% #perform computations by row
-  dplyr::mutate(Threat_mean= (Sit_Abandoned + Sit_BadNews + Sit_Cheated + Sit_Defeated + Sit_Disgraced + Sit_Failure + Sit_Incompetent + Sit_Insulted + Sit_Loss + Sit_Lonely + Sit_Mistaken + Sit_Offended + Sit_Overwhelmed +  Sit_Rejected + Sit_Threat + Sit_Thrwarted + Sit_Transgress + Sit_Uncertain + Sit_Unfair + Sit_Vulnerable)/20,
-         Challenged_mean= (Sit_Challenged + Sit_Unknown + Sit_Unresolved + Sit_Uneventful + Sit_Uninterested)/5) %>% #within-subject SDs for post-TSST "self" oriented appraisals
-  dplyr::ungroup()
-  
-#Merge with final data set
-final_data <- merge(final_data, threat_data, by=c("ID"))
-```
-
-
-```{r sd}
-#Within subject standard deviations for Post-TSST ratings
-sd_data <- data %>%
-  dplyr::select(ID, contains("Emo_"), contains("SS_"), contains("Sit"))%>%
-  tidyr::drop_na() %>% #remove rows with missing data
-  dplyr::rowwise() %>% #perform computations by row
-  dplyr::mutate(SD_Emo = sd(c(Emo_Happy, Emo_Sad, Emo_Activated, Emo_Sleepy, Emo_Afraid, Emo_Relaxed, Emo_Unhappy, Emo_Content, Emo_Quiet, Emo_Stressed, Emo_Guilty, Emo_Pleased, Emo_Angry, Emo_Amused, Emo_Annoyed, Emo_Frustrated, Emo_Bored, Emo_Irritiable, Emo_Panicky, Emo_Proud, Emo_Embarrassed, Emo_Weary, Emo_Hyperactive, Emo_Alert, Emo_Anxious, Emo_Disgusted, Emo_Excited, Emo_Distressed, Emo_Interested, Emo_Calm)), #for all post-TSST emo words
-         SD_NegEmo=sd(c(Emo_Sad, Emo_Sleepy, Emo_Afraid, Emo_Unhappy, Emo_Stressed, Emo_Guilty, Emo_Angry, Emo_Annoyed, Emo_Frustrated, Emo_Bored, Emo_Irritiable, Emo_Panicky, Emo_Embarrassed, Emo_Weary, Emo_Anxious, Emo_Disgusted, Emo_Distressed)), #for post-TSST negative emo words
-         SD_PosEmo=sd(c(Emo_Happy, Emo_Activated, Emo_Relaxed, Emo_Content, Emo_Quiet, Emo_Pleased, Emo_Amused, Emo_Proud, Emo_Hyperactive, Emo_Alert, Emo_Excited, Emo_Interested, Emo_Calm)), #for post-TSST positive emo words
-         SD_SS = sd(c(SS_HeartRateIncrease, SS_DiffBreathing, SS_Faint, SS_StomTense, SS_Shaky, SS_Sweaty, SS_Pale, SS_StomPit, SS_Red, SS_Butterflies, SS_Numb, SS_Powerful, SS_Sick, SS_Tense, SS_Sluggish, SS_Empty, SS_Drained, SS_Exhausted, SS_Headache, SS_Throb, SS_Fidgety, SS_Energized, SS_Shivering, SS_SpineTingle, SS_Pain, SS_Stiff, SS_Weak, SS_HeartPound, SS_Awake, SS_TightChest, SS_Weary, SS_Restless, SS_Jittery, SS_BloodPump, SS_Cold, SS_Goosebumps, SS_Heavy, SS_Hot, SS_HeartPalp, SS_usea, SS_Tingly, SS_Dizzy)), #for post-TSST somatic sensation words
-         SD_Sit=sd(c(Sit_Abandoned, Sit_BadNews, Sit_Challenged, Sit_Cheated, Sit_Defeated, Sit_Disgraced, Sit_Failure, Sit_Incompetent, Sit_Insulted, Sit_Loss, Sit_Lonely, Sit_Mistaken, Sit_Offended, Sit_Overwhelmed, Sit_Rejected, Sit_Threat, Sit_Thrwarted, Sit_Transgress, Sit_Uncertain, Sit_Uneventful, Sit_Unfair, Sit_Uninterested, Sit_Unknown, Sit_Unresolved, Sit_Vulnerable)), #for all post-TSST appraisals
-         SD_AppraiseOther= sd(c(Sit_Abandoned, Sit_Cheated,  Sit_Lonely, Sit_Rejected, Sit_Threat, Sit_Thrwarted, Sit_Transgress, Sit_Uneventful, Sit_Unresolved)), #for post-TSST "other" oriented appraisals
-         SD_AppraiseSelf = sd(c(Sit_Challenged, Sit_Defeated, Sit_Failure, Sit_Incompetent, Sit_Mistaken, Sit_Overwhelmed, Sit_Uncertain, Sit_Vulnerable))) %>% #for post-TSST "self" oriented appraisals
-  dplyr::ungroup()
-  
-```
-
-```{r cv}
-#Coefficient of variation for Post-TSST ratings
-cv_data <- sd_data %>%
-  tidyr::drop_na() %>% #remove rows with missing data
-  dplyr::rowwise() %>%  #perform computations by row
-  dplyr::mutate(CV_Emo= (c(SD_Emo)/mean(c(Emo_Happy, Emo_Sad, Emo_Activated, Emo_Sleepy, Emo_Afraid, Emo_Relaxed, Emo_Unhappy, Emo_Content, Emo_Quiet, Emo_Stressed, Emo_Guilty, Emo_Pleased, Emo_Angry, Emo_Amused, Emo_Annoyed, Emo_Frustrated, Emo_Bored, Emo_Irritiable, Emo_Panicky, Emo_Proud, Emo_Embarrassed, Emo_Weary, Emo_Hyperactive, Emo_Alert, Emo_Anxious, Emo_Disgusted, Emo_Excited, Emo_Distressed, Emo_Interested, Emo_Calm)) * 100),
-                CV_NegEmo = (c(SD_NegEmo)/mean(c(Emo_Sad, Emo_Sleepy, Emo_Afraid, Emo_Unhappy, Emo_Stressed, Emo_Guilty, Emo_Angry, Emo_Annoyed, Emo_Frustrated, Emo_Bored, Emo_Irritiable, Emo_Panicky, Emo_Embarrassed, Emo_Weary, Emo_Anxious, Emo_Disgusted, Emo_Distressed)) * 100), #for post-TSST negative emo words
-                CV_PosEmo= (c(SD_PosEmo)/mean(c(Emo_Happy, Emo_Activated, Emo_Relaxed, Emo_Content, Emo_Quiet, Emo_Pleased, Emo_Amused, Emo_Proud, Emo_Hyperactive, Emo_Alert, Emo_Excited, Emo_Interested, Emo_Calm)) * 100), #for post-TSST positive emo words
-                CV_SS = (c(SD_SS)/mean(c(SS_HeartRateIncrease, SS_DiffBreathing, SS_Faint, SS_StomTense, SS_Shaky, SS_Sweaty, SS_Pale, SS_StomPit, SS_Red, SS_Butterflies, SS_Numb, SS_Powerful, SS_Sick, SS_Tense, SS_Sluggish, SS_Empty, SS_Drained, SS_Exhausted, SS_Headache, SS_Throb, SS_Fidgety, SS_Energized, SS_Shivering, SS_SpineTingle, SS_Pain, SS_Stiff, SS_Weak, SS_HeartPound, SS_Awake, SS_TightChest, SS_Weary, SS_Restless, SS_Jittery, SS_BloodPump, SS_Cold, SS_Goosebumps, SS_Heavy, SS_Hot, SS_HeartPalp, SS_usea, SS_Tingly, SS_Dizzy)) * 100), #for post-TSST somatic sensation words
-                CV_Sit = (c(SD_Sit)/mean(c(Sit_Abandoned, Sit_BadNews, Sit_Challenged, Sit_Cheated, Sit_Defeated, Sit_Disgraced, Sit_Failure, Sit_Incompetent, Sit_Insulted, Sit_Loss, Sit_Lonely, Sit_Mistaken, Sit_Offended, Sit_Overwhelmed, Sit_Rejected, Sit_Threat, Sit_Thrwarted, Sit_Transgress, Sit_Uncertain, Sit_Uneventful, Sit_Unfair, Sit_Uninterested, Sit_Unknown, Sit_Unresolved, Sit_Vulnerable)) * 100), #or all post-TSST appraisals
-                CV_AppraiseOther = (c(SD_AppraiseOther)/mean(c(Sit_Abandoned, Sit_Cheated,  Sit_Lonely, Sit_Rejected, Sit_Threat, Sit_Thrwarted, Sit_Transgress, Sit_Uneventful, Sit_Unresolved)) * 100), #for post-TSST "other" oriented appraisals
-         CV_AppraiseSelf = (c(SD_AppraiseSelf)/mean(c(Sit_Challenged, Sit_Defeated, Sit_Failure, Sit_Incompetent, Sit_Mistaken, Sit_Overwhelmed, Sit_Uncertain, Sit_Vulnerable)) * 100)) %>% #for post-TSST "self" oriented appraisals
-  dplyr::ungroup() %>%
-  dplyr::select(-contains("Emo_"), -contains("SS_"), -contains("Sit")) %>%
-  dplyr::na_if(., "NaN")
-
-#Merge with final data set
-final_data <- merge(final_data, cv_data, by=c("ID"))
-
-```
 
 ## Frequency of participants by race and sex
 
@@ -376,26 +319,24 @@ summary(final_data$Sex) #frequency of females and males
 
 ```{r descriptives}
 df_descriptives <- final_data %>%
-  dplyr::select("Age", "BMI", "DRMneg_mean", "DRMpos_mean", "ICCneg_fz_rev", "ICCpos_fz_rev", "RegEfficacy","SNSrecover", "RMSDDrecover", "RMSDD_TSSTReact", "cvRMSDD_TSSTReact", "SNSreact", "FactorScore", "HR_TSSTReactBL","NegHiEmo", "Somatic_mean", "PosEmo", "Self", "Other", "Threat_mean", "Challenged_mean", contains("SD_"), contains("CV_"))
+  dplyr::select("Age", "BMI", "DRMneg_mean", "DRMpos_mean", "ICCneg_fz_rev", "ICCpos_fz_rev", "Complexity", "OtherBlame", "SelfBlame", "RegEfficacy","SNSrecover", "RMSDDrecover", "RMSDD_TSSTReact", "cvRMSDD_TSSTReact", "SNSreact", "HR_TSSTReactBL","NegHiEmo", "Somatic_mean", "HiEmo")
 
 descriptives <- psych::describe(df_descriptives, skew = T, ranges = T)
 print(descriptives)
 
 #Printing histogram for continuous variables
-psych::multi.hist(df_descriptives, global = F) #Somatic_mean, Appraise_Other, & PosEmo are positively skewed
+psych::multi.hist(df_descriptives, global = F) #Somatic_mean & OtherBlame are positively skewed
 
 df_descriptives <- df_descriptives %>%
-  dplyr::mutate(logOther = log10(Other + 1), #log-transforming to account for skew
-                logSomatic_mean  = log10(Somatic_mean + 1),
-                logPosEmo = log10(PosEmo + 1))
+  dplyr::mutate(logOtherBlame = log10(OtherBlame + 1), #log-transforming to account for skew
+                logSomatic_mean  = log10(Somatic_mean + 1))
 
-psych::multi.hist(df_descriptives, global = F) #distribution looks more normal for logSomatic_mean and logPosEmo, but logOther still looks highly skewed
+psych::multi.hist(df_descriptives, global = F) #distribution looks more normal
 
 #Adding log-transformed variables to final dataset
 final_data <- final_data %>%
-  dplyr::mutate(logOther = log10(Other + 1), 
-                logSomatic_mean  = log10(Somatic_mean + 1),
-                logPosEmo = log10(PosEmo + 1))
+  dplyr::mutate(logOtherBlame = log10(OtherBlame+ 1), 
+                logSomatic_mean  = log10(Somatic_mean + 1))
 ```
 
 ## Reliability
