@@ -37,6 +37,8 @@ library(semPlot) #for SEM
 # Data Prep
 
 ```{r data-prep, echo=TRUE}
+setwd("/Users/adriennebonar/Documents/GitHub/idec-granularity")
+
 #Reading in data
 DRM_dataset <- readr::read_csv("/Users/adriennebonar/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/Grad_School/Research/Projects/Granularity/IDEC_Granularity/Data/Granularity_Analyses/datasets/WdataDRM.csv")
 IDEC_S1S2_dataset <- readxl::read_excel("/Users/adriennebonar/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/Grad_School/Research/Projects/Granularity/IDEC_Granularity/Data/Granularity_Analyses/datasets/IDEC_S1S2DataforR_02252020.xlsx") %>%
@@ -436,24 +438,23 @@ final_data$SS_alpha_std <-SS_alpha_summary$std.alpha
 
 ```{r correlations}
 corr_small<- final_data %>%
-  dplyr::select("FactorScore", "DRMneg_mean", "DRMpos_mean", "ICCneg_fz_rev", "ICCpos_fz_rev", "SNSreact", "NegHiEmo")
+  dplyr::select("Complexity","DRMneg_mean", "DRMpos_mean", "ICCneg_fz_rev", "ICCpos_fz_rev", "SNSreact", "NegHiEmo", "logSomatic_mean", "logOtherBlame", "SelfBlame", "RegEfficacy")
 
 apaTables::apa.cor.table(corr_small, table.number = NA, show.conf.interval = FALSE, show.sig.stars = TRUE, landscape = FALSE)
 ```
+
 
 # Hierachical regressions analyses for main manuscript
 
 ```{r regression-prep}
 #Centering predictors and standardizing interaction terms
 final_data <- final_data %>%
-  dplyr::mutate(Age_c = scale(Age, center = T, scale = F),
-                BMI_c = scale(BMI, center = T, scale = F),
-                DRMneg_mean_c = scale(DRMneg_mean, center = T, scale =F),
+  dplyr::mutate(DRMneg_mean_c = scale(DRMneg_mean, center = T, scale =F),
                 DRMpos_mean_c = scale(DRMneg_mean, center = T, scale=F),
-                FactorScore_c = scale(FactorScore, center = T, scale = F),
+                Complexity_z = scale(Complexity, center = T, scale = F),
                 RegEfficacy_z = scale(RegEfficacy, center =T, scale =T),
-                Threat_mean_z = scale(Threat_mean, center = F, scale = T),
-                Challenged_mean_z = scale(Challenged_mean, center = F, scale = T),
+                OtherBlame_z = scale(logOtherBlame, center = F, scale = T),
+                SelfBlame_z = scale(SelfBlame, center = F, scale = T),
                 SNSreact_z = scale(SNSreact, center = F, scale = T),
                 SNSrecover_z = scale(SNSrecover, center = F, scale =T),
                 RMSDDreact_z = scale(cvRMSDD_TSSTReact, center = F, scale = T),
@@ -518,9 +519,8 @@ model_diagnose_params <- function(mod, n, Data){
   print("Determining if any cases may be having undue influence on results, 
   both with respect to the entire model and with respect to specific
   regression coefficient estimates.")
-  cutoff <- qf(.1, 7, (nrow(model_params)-7), lower.tail = T) 
+  cutoff <- qf(.1, 5, (nrow(model_params)-5), lower.tail = T) 
   print((model_params[which(model_params$Cooks > cutoff),] ))
-  
   
   InfPlot <- ggplot(data = model_params, mapping = aes(x = V1, y = Cooks)) + 
     geom_point() + geom_segment(aes (x = V1, y = 0, xend = V1, yend = Cooks)) + 
@@ -535,66 +535,74 @@ model_diagnose_params <- function(mod, n, Data){
 
 ```
 
-## MODERATIONS: Granularity and physio reactivity predicting rating intensity
+## MODERATIONS: Granularity and covariates predicting stress responses
 
-### Regressions for Model 1a: Granularity and SNS reactivity on NegHi emotion
+### Regressions for Model 1a: Granularity on NegHi emotion
 
 ```{r reg-1a}
-#Regressions for Model 1a: Negative granularity and SNS reactivity on NegHi emotion
+#Regressions for Model 1a: Negative granularity on NegHi emotion
 NegHiMod1.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev, data= final_data)
-NegHiMod1.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
-NegHiMod1.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
-NegHiMod1.4 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Sex + Age_c + BMI_c + DRMneg_mean_c, data= final_data)
-NegHiMod1.5 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + SNSreact_z + FactorScore + Sex + Age_c + BMI_c + DRMneg_mean_c, data= final_data)
+NegHiMod1.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Complexity_z, data= final_data)
+NegHiMod1.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c, data= final_data)
 
 summary(NegHiMod1.1) #results summaries
 summary(NegHiMod1.2)
 summary(NegHiMod1.3)
-summary(NegHiMod1.4)
-summary(NegHiMod1.5)
 
-table3a <- apa.reg.table(NegHiMod1.1, NegHiMod1.2, NegHiMod1.3, NegHiMod1.4, filename = "/Users/adriennebonar/Desktop/datasets/table3a.doc", table.number = 3)$table_body #model comparison table
+table1a <- apa.reg.table(NegHiMod1.1, NegHiMod1.2, NegHiMod1.3, filename = "/Users/adriennebonar/Desktop/datasets/table1a.doc", table.number = 3)$table_body #model comparison table
 
 ```
 
 ```{r reg-1a-pos} 
-#Regressions for Positive granularity and SNS reactivity on NegHi emotion
+#Regressions for Positive granularity on NegHi emotion
 NegHiMod1.5 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev, data= final_data)
-NegHiMod1.6 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + SNSreact_z, data= final_data)
-NegHiMod1.7 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev * SNSreact_z, data= final_data) 
-NegHiMod1.8 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev * SNSreact_z + FactorScore + Sex + Age_c + BMI_c + DRMpos_mean_c, data= final_data)
-NegHiMod1.9 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + SNSreact_z + FactorScore + Sex + Age_c + BMI_c + DRMpos_mean_c, data= final_data)
+NegHiMod1.6 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + Complexity_z, data= final_data)
+NegHiMod1.7 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMpos_mean_c, data= final_data) 
 
 summary(NegHiMod1.5) #results summaries
 summary(NegHiMod1.6)
 summary(NegHiMod1.7)
-summary(NegHiMod1.8)
-summary(NegHiMod1.9)
 
-table3b <- apa.reg.table(NegHiMod1.5, NegHiMod1.6, NegHiMod1.7, NegHiMod1.8, filename = "/Users/adriennebonar/Desktop/datasets/table3b.doc", table.number = 4)$table_body #model comparison table
+table1a-pos <- apa.reg.table(NegHiMod1.5, NegHiMod1.6, NegHiMod1.7, filename = "/Users/adriennebonar/Desktop/datasets/table1-pos.doc", table.number = 4)$table_body #model comparison table
 ```
 
 #### Model Diagnostics
 
 ```{r model1a-pos-diagnositc}
-model_diagnose_params(NegHiMod1.8, 180, final_data)
+model_diagnose_params(NegHiMod1.3, 180, final_data)
 ```
 
-### Regressions for Model 1b: Granularity and SNS reactivity on somatic intensity
+```{r model1a-pos-diagnositc}
+model_diagnose_params(NegHiMod1.7, 180, final_data)
+```
+
+### Regressions for Model 1b: Granularity on somatic intensity
 
 ```{r reg-1b}
-#Regressions for Model 1b: Negative granularity and SNS reactivity on somatic intensity rating mean
+#Regressions for Model 1b: Negative granularity on somatic intensity rating mean
 SomMod1.1 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev, data= final_data)
-SomMod1.2 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
-SomMod1.3 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
-SomMod1.4 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+SomMod1.2 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + Complexity_z, data= final_data)
+SomMod1.3 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c  data= final_data) 
 
 summary(SomMod1.1) #results summaries
 summary(SomMod1.2)
 summary(SomMod1.3)
-summary(SomMod1.4)
 
-table4a <- apa.reg.table(SomMod1.1, SomMod1.2, SomMod1.3, SomMod1.4, filename = "/Users/adriennebonar/Desktop/datasets/table4a.doc", table.number = 4)$table_body #model comparison table
+table1b <- apa.reg.table(SomMod1.1, SomMod1.2, SomMod1.3, filename = "/Users/adriennebonar/Desktop/datasets/table1b.doc", table.number = 4)$table_body #model comparison table
+```
+
+
+```{r reg-1b-pos}
+#Positive granularity on somatic intensity rating mean
+SomMod1.5 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev, data= final_data)
+SomMod1.6 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev + Complexity_z,  data= final_data)
+SomMod1.7 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMpos_mean_c  data= final_data) 
+
+summary(SomMod1.5) #results summaries
+summary(SomMod1.6)
+summary(SomMod1.7)
+
+table1b-pos <- apa.reg.table(SomMod1.5, SomMod1.6, SomMod1.7, filename = "/Users/adriennebonar/Desktop/datasets/table1b-pos.doc", table.number = 4)$table_body #model comparison table
 ```
 
 #### Model Diagnostics
@@ -603,361 +611,46 @@ table4a <- apa.reg.table(SomMod1.1, SomMod1.2, SomMod1.3, SomMod1.4, filename = 
 model_diagnose_params(SomMod1.4, 180, final_data) #consider running model with IDs 186, 86, 118, and 160 removed
 ```
 
-
-```{r reg-1b-pos}
-#Positive granularity and SNS reactivity on somatic intensity rating mean
-SomMod1.5 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev, data= final_data)
-SomMod1.6 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev + SNSreact_z, data= final_data)
-SomMod1.7 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev * SNSreact_z, data= final_data) 
-SomMod1.8 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMpos_mean_c, data= final_data)
-
-summary(SomMod1.5) #results summaries
-summary(SomMod1.6)
-summary(SomMod1.7)
-summary(SomMod1.8)
-
-apa.reg.table(SomMod1.5, SomMod1.6, SomMod1.7, SomMod1.8)$table_body #model comparison table
-table4b <- apa.reg.table(SomMod1.5, SomMod1.6, SomMod1.7, SomMod1.8, filename = "/Users/adriennebonar/Desktop/datasets/table4b.doc", table.number = 4)$table_body #model comparison table
-```
-
-#### Model Diagnostics
-
 ```{r model1b-pos-diagnositc}
 model_diagnose_params(SomMod1.8, 180, final_data) 
 ```
 
-### Regressions for Model 1c: Granularity and SNS reactivity on Other-focused Neg Appraisals
+### Regressions for Model 1c: Granularity on SNS reactivity
 
 ```{r reg-1c}
-#Regressions for Model 1d: Negative granularity and SNS reactivity on other appraisals - normal GLM
-OtherMod1.1 <- lm(formula = Other ~ ICCneg_fz_rev, data= final_data)
-OtherMod1.2 <- lm(formula = Other ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
-OtherMod1.3 <- lm(formula = Other ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
-OtherMod1.4 <- lm(formula = Other ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMneg_mean_c, data= final_data)
+#Regressions for Model 1c: Negative granularity on SNS reactvity
+SNSMod1.1 <- lm(formula = SNSreact_z ~ ICCneg_fz_rev, data= final_data)
+SNSMod1.2 <- lm(formula = SNSreact_z ~ ICCneg_fz_rev + Complexity_z,  data= final_data)
+SNSMod1.3 <- lm(formula = SNSreact_z ~ ICCneg_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c, data= final_data) 
 
-summary(OtherMod1.1) #results summaries
-summary(OtherMod1.2)
-summary(OtherMod1.3)
-summary(OtherMod1.4)
+summary(SNSMod1.1) #results summaries
+summary(SNSMod1.2)
+summary(SNSMod1.3)
 
-apa.reg.table(OtherMod1.1, OtherMod1.2, OtherMod1.3, OtherMod1.4)$table_body #model comparison table
-```
-
-
-```{r}
-#Positive granularity and SNS reactivity on other appraisals - normal GLM
-OtherMod1.5 <- lm(formula = Other ~ ICCpos_fz_rev, data= final_data)
-OtherMod1.6 <- lm(formula = Other ~ ICCpos_fz_rev + SNSreact_z, data= final_data)
-OtherMod1.7 <- lm(formula = Other ~ ICCpos_fz_rev * SNSreact_z, data= final_data) 
-OtherMod1.8 <- lm(formula = Other ~ ICCpos_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMpos_mean_c, data= final_data)
-
-summary(OtherMod1.5) #results summaries
-summary(OtherMod1.6)
-summary(OtherMod1.7)
-summary(OtherMod1.8)
-
-apa.reg.table(OtherMod1.5, OtherMod1.6, OtherMod1.7, OtherMod1.8)$table_body #model comparison table
-```
-
-### Regressions for Model 1d: Granularity and SNS reactivity on Self-focused Neg Appraisals
-
-```{r reg-1d}
-#Regressions for Model 1d: Negative granularity and SNS reactivity on self appraisals
-SelfMod1.1 <- lm(formula = Self ~ ICCneg_fz_rev, data= final_data)
-SelfMod1.2 <- lm(formula = Self ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
-SelfMod1.3 <- lm(formula = Self ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
-SelfMod1.4 <- lm(formula = Self ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SelfMod1.1) #results summaries
-summary(SelfMod1.2)
-summary(SelfMod1.3)
-summary(SelfMod1.4)
-
-apa.reg.table(SelfMod1.1, SelfMod1.2, SelfMod1.3, SelfMod1.4)$table_body #model comparison table
+table1c <- apa.reg.table(SNSMod1.1, SNSMod1.2, SNSMod1.3, filename = "/Users/adriennebonar/Desktop/datasets/table1c.doc", table.number = 4)$table_body
 ```
 
 ```{r}
-#Positive granularity and SNS reactivity on self appraisals
-SelfMod1.5 <- lm(formula = Self ~ ICCpos_fz_rev, data= final_data)
-SelfMod1.6 <- lm(formula = Self ~ ICCpos_fz_rev + SNSreact_z, data= final_data)
-SelfMod1.7 <- lm(formula = Self ~ ICCpos_fz_rev * SNSreact_z, data= final_data) 
-SelfMod1.8 <- lm(formula = Self ~ ICCpos_fz_rev * SNSreact_z + FactorScore + Age_c + Sex + BMI_c + DRMpos_mean_c, data= final_data)
+#Positive granularity on SNS reactvity
+SNSMod1.4 <- lm(formula = SNSreact_z ~ ICCpos_fz_rev, data= final_data)
+SNSMod1.5 <- lm(formula = SNSreact_z ~ ICCpos_fz_rev + Complexity_z,  data= final_data)
+SNSMod1.6 <- lm(formula = SNSreact_z ~ ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMpos_mean_c, data= final_data) 
 
-summary(SelfMod1.5) #results summaries
-summary(SelfMod1.6)
-summary(SelfMod1.7)
-summary(SelfMod1.8)
+summary(SNSMod1.4) #results summaries
+summary(SNSMod1.5)
+summary(SNSMod1.6)
 
-apa.reg.table(SelfMod1.5, SelfMod1.6, SelfMod1.7, SelfMod1.8)$table_body #model comparison table
-```
-
-### Regressions for Model 2a: Granularity and HRV reactivity on NegHi emotion
-
-```{r reg-2a}
-#Regressions for Model 2a: Negative granularity and corrected HRV reactivity on NegHi emotion
-NegHiMod2.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev, data= final_data)
-NegHiMod2.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
-NegHiMod2.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
-NegHiMod2.4 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(NegHiMod2.1) #results summaries
-summary(NegHiMod2.2)
-summary(NegHiMod2.3)
-summary(NegHiMod2.4)
-
-apa.reg.table(NegHiMod2.1, NegHiMod2.2, NegHiMod2.3, NegHiMod2.4)$table_body #model comparison table
-```
-
-
-```{r reg-2a-pos}
-#Positive granularity and corrected HRV reactivity on NegHi emotion
-NegHiMod2.5 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev, data= final_data)
-NegHiMod2.6 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + RMSDDreact_z, data= final_data)
-NegHiMod2.7 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev * RMSDDreact_z, data= final_data) 
-NegHiMod2.8 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev * RMSDDreact_z + FactorScore + Sex + BMI_c + DRMpos_mean_c, data= final_data)
-
-summary(NegHiMod2.5) #results summaries
-summary(NegHiMod2.6)
-summary(NegHiMod2.7)
-summary(NegHiMod2.8)
-
-apa.reg.table(NegHiMod2.5, NegHiMod2.6, NegHiMod2.7, NegHiMod2.8)$table_body #model comparison table
-```
-
-
-### Regressions for Model 2b: Granularity and HRV reactivity on somatic intensity
-
-```{r reg-2b}
-#Regressions for Model 2b: Negative granularity and corrected HRV reactivity on somatic intensity
-SomMod2.1 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev, data= final_data)
-SomMod2.2 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
-SomMod2.3 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
-SomMod2.4 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SomMod2.1) #results summaries
-summary(SomMod2.2)
-summary(SomMod2.3)
-summary(SomMod2.4)
-
-apa.reg.table(SomMod2.1, SomMod2.2, SomMod2.3, SomMod2.4)$table_body #model comparison table
-```
-
-***you stopped editing here
-```{r}
-#Positive granularity and corrected HRV reactivity on somatic intensity
-SomMod2.1 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev, data= final_data)
-SomMod2.2 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
-SomMod2.3 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
-SomMod2.4 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SomMod2.1) #results summaries
-summary(SomMod2.2)
-summary(SomMod2.3)
-summary(SomMod2.4)
-
-apa.reg.table(SomMod2.1, SomMod2.2, SomMod2.3, SomMod2.4)$table_body #model comparison table
-```
-
-
-### Regressions for Model 2c: Negative granularity and HRV reactivity on self-focused appraisals - SIG FACTOR SCORE
-
-```{r reg-2c}
-#Regressions for Model 2c: Negative granularity and corrected HRV reactivity on self-focused appraisals
-SelfMod2.1 <- lm(formula = Self ~ ICCneg_fz_rev, data= final_data)
-SelfMod2.2 <- lm(formula = Self ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
-SelfMod2.3 <- lm(formula = Self ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
-SelfMod2.4 <- lm(formula = Self ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SelfMod2.1) #results summaries
-summary(SelfMod2.2)
-summary(SelfMod2.3)
-summary(SelfMod2.4)
-
-apa.reg.table(SelfMod2.1, SelfMod2.2, SelfMod2.3, SelfMod2.4)$table_body #model comparison table
+table1c-pos <- apa.reg.table(SNSMod1.4, SNSMod1.5, SNSMod1.6, filename = "/Users/adriennebonar/Desktop/datasets/table1c-pos.doc", table.number = 4)$table_body
 ```
 
 #### Model Diagnostics
 
-```{r model2c-diagnostic}
-model_diagnose_params(SelfMod2.4, 180, final_data)
+```{r model1b-diagnositc}
+model_diagnose_params(SNSMod1.3, 180, final_data) #consider running model with IDs 186, 86, 118, and 160 removed
 ```
 
-## MODERATIONS: Negative granularity and physio reactivity predicting rating specificity
-
-### Regressions for Model 3a: Negative granularity and SNS reactivity on Neg emo specificity
-
-```{r reg-3a}
-#Regressions for Model 3a: Negative granularity and SNS reactivity on Neg emo specificity
-SDNegMod3.1 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev, data= final_data)
-SDNegMod3.2 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
-SDNegMod3.3 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
-SDNegMod3.4 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SDNegMod3.1) #results summaries
-summary(SDNegMod3.2)
-summary(SDNegMod3.3)
-summary(SDNegMod3.4)
-
-apa.reg.table(SDNegMod3.1, SDNegMod3.2, SDNegMod3.3, SDNegMod3.4)$table_body #model comparison table
-```
-
-#### Model Diagnostics
-
-```{r model3a-diagnostic}
-model_diagnose_params(SDNegMod3.4, 180, final_data)
-```
-
-### Regressions for Model 3b: Negative granularity and SNS reactivity on somatic specificity
-
-```{r reg-3b}
-#Regressions for Model 3b: Negative granularity and SNS reactivity on somatic specificity
-SDSomMod3.1 <- lm(formula = SD_SS ~ ICCneg_fz_rev, data= final_data)
-SDSomMod3.2 <- lm(formula = SD_SS ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
-SDSomMod3.3 <- lm(formula = SD_SS ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
-SDSomMod3.4 <- lm(formula = SD_SS ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SDSomMod3.1) #results summaries
-summary(SDSomMod3.2)
-summary(SDSomMod3.3)
-summary(SDSomMod3.4)
-
-apa.reg.table(SDSomMod3.1, SDSomMod3.2, SDSomMod3.3, SDSomMod3.4)$table_body #model comparison table
-```
-
-#### Model Diagnostics
-
-```{r model3b-diagnostic}
-model_diagnose_params(SDSomMod3.4, 180, final_data)
-```
-
-### Regressions for Model 3c: Negative granularity and SNS reactivity on appraisal specificity
-
-```{r reg-3c}
-#Regressions for Model 3c: Negative granularity and SNS reactivity on appraisal specificity
-SDSitMod3.1 <- lm(formula = SD_Sit ~ ICCneg_fz_rev, data= final_data)
-SDSitMod3.2 <- lm(formula = SD_Sit ~ ICCneg_fz_rev + SNSreact_z, data= final_data)
-SDSitMod3.3 <- lm(formula = SD_Sit ~ ICCneg_fz_rev * SNSreact_z, data= final_data) 
-SDSitMod3.4 <- lm(formula = SD_Sit ~ ICCneg_fz_rev * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SDSitMod3.1) #results summaries
-summary(SDSitMod3.2)
-summary(SDSitMod3.3)
-summary(SDSitMod3.4)
-
-apa.reg.table(SDSitMod3.1, SDSitMod3.2, SDSitMod3.3, SDSitMod3.4)$table_body #model comparison table
-```
-
-#### Model Diagnostics
-
-```{r model3c-diagnostic}
-model_diagnose_params(SDSitMod3.4, 180, final_data)
-```
-
-### Regressions for Model 4a: Negative granularity and HRV reactivity on Neg emo specificity
-
-```{r reg-4a}
-#Regressions for Model 4a: Negative granularity and HRV reactivity on Neg emo specificity
-SDNegMod4.1 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev, data= final_data)
-SDNegMod4.2 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
-SDNegMod4.3 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
-SDNegMod4.4 <- lm(formula = SD_NegEmo ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SDNegMod4.1) #results summaries
-summary(SDNegMod4.2)
-summary(SDNegMod4.3)
-summary(SDNegMod4.4)
-
-apa.reg.table(SDNegMod4.1, SDNegMod4.2, SDNegMod4.3, SDNegMod4.4)$table_body #model comparison table
-```
-
-#### Model Diagnostics
-
-```{r model4a-diagnostic}
-model_diagnose_params(SDNegMod4.4, 180, final_data)
-```
-
-### Regressions for Model 4b: Negative granularity and HRV reactivity on somatic specificity
-
-```{r reg-4b}
-#Regressions for Model 4b: Negative granularity and HRV reactivity on somatic specificity
-SDSSMod4.1 <- lm(formula = SD_SS ~ ICCneg_fz_rev, data= final_data)
-SDSSMod4.2 <- lm(formula = SD_SS ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
-SDSSMod4.3 <- lm(formula = SD_SS ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
-SDSSMod4.4 <- lm(formula = SD_SS ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SDSSMod4.1) #results summaries
-summary(SDSSMod4.2)
-summary(SDSSMod4.3)
-summary(SDSSMod4.4)
-
-apa.reg.table(SDSSMod4.1, SDSSMod4.2, SDSSMod4.3, SDSSMod4.4)$table_body #model comparison table
-```
-
-#### Model Diagnostics
-
-```{r model4b-diagnostic}
-model_diagnose_params(SDSSMod4.4, 180, final_data)
-```
-
-### Regressions for Model 4c: Negative granularity and HRV reactivity on neg appraisal specificity
-
-```{r reg-4c}
-#Regressions for Model 4c: Negative granularity and HRV reactivity on  appraisal specificity
-SDSitMod4.1 <- lm(formula = SD_Sit ~ ICCneg_fz_rev, data= final_data)
-SDSitMod4.2 <- lm(formula = SD_Sit ~ ICCneg_fz_rev + RMSDDreact_z, data= final_data)
-SDSitMod4.3 <- lm(formula = SD_Sit ~ ICCneg_fz_rev * RMSDDreact_z, data= final_data) 
-SDSitMod4.4 <- lm(formula = SD_Sit ~ ICCneg_fz_rev * RMSDDreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(SDSitMod4.1) #results summaries
-summary(SDSitMod4.2)
-summary(SDSitMod4.3)
-summary(SDSitMod4.4)
-
-apa.reg.table(SDSitMod4.1, SDSitMod4.2, SDSitMod4.3, SDSitMod4.4)$table_body #model comparison table
-```
-
-#### Model Diagnostics
-
-```{r model4c-diagnostic}
-model_diagnose_params(SDSitMod4.4, 180, final_data)
-```
-
-
-## MODERATIONS: Negative granularity, physio reactivity,and threat v. challenge
-
-```{r reg-5a}
-#Regressions for Model 5a: Negative granularity, threat, and SNS on NegHi emotion
-TMod5.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev, data= final_data)
-TMod5.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Threat_mean_z, data= final_data)
-TMod5.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Threat_mean_z + SNSreact_z, data= final_data)
-TMod5.4 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * Threat_mean_z * SNSreact_z, data= final_data) 
-TMod5.5 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * Threat_mean_z * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(TMod5.1) #results summaries
-summary(TMod5.2)
-summary(TMod5.3)
-summary(TMod5.4)
-summary(TMod5.5)
-
-apa.reg.table(TMod5.1, TMod5.2, TMod5.3, TMod5.4,TMod5.5)$table_body #model comparison table
-```
-
-
-```{r reg-5b}
-#Regressions for Model 5b: Negative granularity, challenged, and SNS on NegHi emotion
-CMod5.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev, data= final_data)
-CMod5.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Challenged_mean_z, data= final_data)
-CMod5.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Challenged_mean_z + SNSreact_z, data= final_data)
-CMod5.4 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * Challenged_mean_z * SNSreact_z, data= final_data) 
-CMod5.5 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev * Challenged_mean_z * SNSreact_z + FactorScore + Age + Sex + BMI_c + DRMneg_mean_c, data= final_data)
-
-summary(CMod5.1) #results summaries
-summary(CMod5.2)
-summary(CMod5.3)
-summary(CMod5.4)
-summary(CMod5.5)
-
-apa.reg.table(CMod5.1, CMod5.2, CMod5.3, CMod5.4,CMod5.5)$table_body #model comparison table
+```{r model1b-pos-diagnositc}
+model_diagnose_params(SNSMod1.6, 180, final_data) 
 ```
 
 ## Plots
