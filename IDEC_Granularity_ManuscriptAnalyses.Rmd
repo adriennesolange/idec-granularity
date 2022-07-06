@@ -37,8 +37,6 @@ library(semPlot) #for SEM
 # Data Prep
 
 ```{r data-prep, echo=TRUE}
-setwd("/Users/adriennebonar/Documents/GitHub/idec-granularity")
-
 #Reading in data
 DRM_dataset <- readr::read_csv("/Users/adriennebonar/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/Grad_School/Research/Projects/Granularity/IDEC_Granularity/Data/Granularity_Analyses/datasets/WdataDRM.csv")
 IDEC_S1S2_dataset <- readxl::read_excel("/Users/adriennebonar/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/Grad_School/Research/Projects/Granularity/IDEC_Granularity/Data/Granularity_Analyses/datasets/IDEC_S1S2DataforR_02252020.xlsx") %>%
@@ -206,10 +204,10 @@ print(fa1) #fit indices suggest okay model fit
 
 #Running same model but dropping ICCpos and ICCneg
 fa2 <- fa(efa_means_dataset[2:length(efa_means_dataset)] %>% dplyr::select(-contains("ICC")), nfactors= 1, rotate= 'promax', fm='ml', scores = "regression")
-print(fa2) #fit indices are worse
+print(fa2) #fit indices are acceptable
 
 #Getting factor scores
-fs <- fa1$scores 
+fs <- fa2$scores 
 full_efa_dataset <- cbind(fs, efa_means_dataset[1])
 
 #Merge EFA data with the rest of the data
@@ -463,7 +461,7 @@ final_data <- final_data %>%
 
 
 ```{r diagnositc-func}
-#Making function for diagnostics; function adapted from Feldman, M.J., MacCormack, J.K., Bonar, A.S., and Lindquist, K.A. (2021). Interoceptive ability moderates the effect of physiological reactivity on social judgment https://osf.io/8ys5a/
+#Making function for diagnostics; function created by Mallory J. Feldman, adapted from Feldman, M.J., MacCormack, J.K., Bonar, A.S., and Lindquist, K.A. (2021). Interoceptive ability moderates the effect of physiological reactivity on social judgment https://osf.io/8ys5a/
 
 model_diagnose_params <- function(mod, n, Data){
   model_params <- as.data.frame(matrix(nrow = n, ncol = 1))
@@ -519,7 +517,7 @@ model_diagnose_params <- function(mod, n, Data){
   print("Determining if any cases may be having undue influence on results, 
   both with respect to the entire model and with respect to specific
   regression coefficient estimates.")
-  cutoff <- qf(.1, 5, (nrow(model_params)-5), lower.tail = T) 
+  cutoff <- qf(.1, 7, (nrow(model_params)-7), lower.tail = T) #computing F distribution with degrees of freedom p, N-p
   print((model_params[which(model_params$Cooks > cutoff),] ))
   
   InfPlot <- ggplot(data = model_params, mapping = aes(x = V1, y = Cooks)) + 
@@ -530,7 +528,7 @@ model_diagnose_params <- function(mod, n, Data){
   print(ggpubr::ggarrange(residPLOT, LevPlot, InfPlot, nrow = 3))
   
   print("lm function for plotting cooks distance")
-  plot(mod, which = 5)
+  plot(mod, which = 7)
 }
 
 ```
@@ -540,49 +538,34 @@ model_diagnose_params <- function(mod, n, Data){
 ### Regressions for Model 1a: Granularity on NegHi emotion
 
 ```{r reg-1a}
-#Regressions for Model 1a: Negative granularity on NegHi emotion
-NegHiMod1.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev, data= final_data)
-NegHiMod1.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Complexity_z, data= final_data)
-NegHiMod1.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c, data= final_data)
+#Regressions for Model 1a: Granularity on NegHi emotion
+NegHiMod1.1 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + ICCpos_fz_rev, data= final_data)
+NegHiMod1.2 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + ICCpos_fz_rev + Complexity_z, data= final_data)
+NegHiMod1.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c + DRMpos_mean_c, data= final_data) #DRMpos_mean_c not definied because of singularities, removing from subsequent model
+NegHiMod1.3 <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c + DRMpos_mean_c, data= final_data) #DRMpos_mean_c not definied because of singularities, removing from subsequent model
+NegHiMod1.3a <- lm(formula = NegHiEmo ~ ICCneg_fz_rev + ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c, data= final_data) 
 
 summary(NegHiMod1.1) #results summaries
 summary(NegHiMod1.2)
-summary(NegHiMod1.3)
+summary(NegHiMod1.3a)
 
-table1a <- apa.reg.table(NegHiMod1.1, NegHiMod1.2, NegHiMod1.3, filename = "/Users/adriennebonar/Desktop/datasets/table1a.doc", table.number = 3)$table_body #model comparison table
+table1a <- apa.reg.table(NegHiMod1.1, NegHiMod1.2, NegHiMod1.3a, filename = "/Users/adriennebonar/Desktop/datasets/table1a.doc", table.number = 3)$table_body #model comparison table
 
-```
-
-```{r reg-1a-pos} 
-#Regressions for Positive granularity on NegHi emotion
-NegHiMod1.5 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev, data= final_data)
-NegHiMod1.6 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + Complexity_z, data= final_data)
-NegHiMod1.7 <- lm(formula = NegHiEmo ~ ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMpos_mean_c, data= final_data) 
-
-summary(NegHiMod1.5) #results summaries
-summary(NegHiMod1.6)
-summary(NegHiMod1.7)
-
-table1a-pos <- apa.reg.table(NegHiMod1.5, NegHiMod1.6, NegHiMod1.7, filename = "/Users/adriennebonar/Desktop/datasets/table1-pos.doc", table.number = 4)$table_body #model comparison table
 ```
 
 #### Model Diagnostics
 
 ```{r model1a-pos-diagnositc}
-model_diagnose_params(NegHiMod1.3, 180, final_data)
-```
-
-```{r model1a-pos-diagnositc}
-model_diagnose_params(NegHiMod1.7, 180, final_data)
+model_diagnose_params(NegHiMod1.3, 186, final_data)
 ```
 
 ### Regressions for Model 1b: Granularity on somatic intensity
 
 ```{r reg-1b}
-#Regressions for Model 1b: Negative granularity on somatic intensity rating mean
-SomMod1.1 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev, data= final_data)
-SomMod1.2 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + Complexity_z, data= final_data)
-SomMod1.3 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c  data= final_data) 
+#Regressions for Model 1b: Granularity on somatic intensity rating mean
+SomMod1.1 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + ICCpos_fz_rev, data= final_data)
+SomMod1.2 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + ICCpos_fz_rev + Complexity_z, data= final_data)
+SomMod1.3 <- lm(formula = logSomatic_mean ~ ICCneg_fz_rev + ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c,  data= final_data) 
 
 summary(SomMod1.1) #results summaries
 summary(SomMod1.2)
@@ -592,36 +575,19 @@ table1b <- apa.reg.table(SomMod1.1, SomMod1.2, SomMod1.3, filename = "/Users/adr
 ```
 
 
-```{r reg-1b-pos}
-#Positive granularity on somatic intensity rating mean
-SomMod1.5 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev, data= final_data)
-SomMod1.6 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev + Complexity_z,  data= final_data)
-SomMod1.7 <- lm(formula = logSomatic_mean ~ ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMpos_mean_c  data= final_data) 
-
-summary(SomMod1.5) #results summaries
-summary(SomMod1.6)
-summary(SomMod1.7)
-
-table1b-pos <- apa.reg.table(SomMod1.5, SomMod1.6, SomMod1.7, filename = "/Users/adriennebonar/Desktop/datasets/table1b-pos.doc", table.number = 4)$table_body #model comparison table
-```
-
 #### Model Diagnostics
 
 ```{r model1b-diagnositc}
-model_diagnose_params(SomMod1.4, 180, final_data) #consider running model with IDs 186, 86, 118, and 160 removed
-```
-
-```{r model1b-pos-diagnositc}
-model_diagnose_params(SomMod1.8, 180, final_data) 
+model_diagnose_params(SomMod1.4, 186, final_data) #consider running model with IDs 186, 86, 118, and 160 removed
 ```
 
 ### Regressions for Model 1c: Granularity on SNS reactivity
 
 ```{r reg-1c}
-#Regressions for Model 1c: Negative granularity on SNS reactvity
-SNSMod1.1 <- lm(formula = SNSreact_z ~ ICCneg_fz_rev, data= final_data)
-SNSMod1.2 <- lm(formula = SNSreact_z ~ ICCneg_fz_rev + Complexity_z,  data= final_data)
-SNSMod1.3 <- lm(formula = SNSreact_z ~ ICCneg_fz_rev + Complexity_z + SNSreact_z + Sex + DRMneg_mean_c, data= final_data) 
+#Regressions for Model 1c: Granularity on SNS reactvity
+SNSMod1.1 <- lm(formula = SNSreact_z ~ ICCneg_fz_rev + ICCpos_fz_rev,  data= final_data)
+SNSMod1.2 <- lm(formula = SNSreact_z ~ ICCneg_fz_rev + ICCpos_fz_rev + Complexity_z,  data= final_data)
+SNSMod1.3 <- lm(formula = SNSreact_z ~ ICCneg_fz_rev + ICCpos_fz_rev + Complexity_z + Sex + DRMneg_mean_c, data= final_data) 
 
 summary(SNSMod1.1) #results summaries
 summary(SNSMod1.2)
@@ -629,50 +595,63 @@ summary(SNSMod1.3)
 
 table1c <- apa.reg.table(SNSMod1.1, SNSMod1.2, SNSMod1.3, filename = "/Users/adriennebonar/Desktop/datasets/table1c.doc", table.number = 4)$table_body
 ```
-
-```{r}
-#Positive granularity on SNS reactvity
-SNSMod1.4 <- lm(formula = SNSreact_z ~ ICCpos_fz_rev, data= final_data)
-SNSMod1.5 <- lm(formula = SNSreact_z ~ ICCpos_fz_rev + Complexity_z,  data= final_data)
-SNSMod1.6 <- lm(formula = SNSreact_z ~ ICCpos_fz_rev + Complexity_z + SNSreact_z + Sex + DRMpos_mean_c, data= final_data) 
-
-summary(SNSMod1.4) #results summaries
-summary(SNSMod1.5)
-summary(SNSMod1.6)
-
-table1c-pos <- apa.reg.table(SNSMod1.4, SNSMod1.5, SNSMod1.6, filename = "/Users/adriennebonar/Desktop/datasets/table1c-pos.doc", table.number = 4)$table_body
-```
-
 #### Model Diagnostics
 
-```{r model1b-diagnositc}
-model_diagnose_params(SNSMod1.3, 180, final_data) #consider running model with IDs 186, 86, 118, and 160 removed
+```{r model1c-diagnositc}
+model_diagnose_params(SNSMod1.3, 186, final_data) #consider running model with IDs 186, 86, 118, and 160 removed
 ```
 
-```{r model1b-pos-diagnositc}
-model_diagnose_params(SNSMod1.6, 180, final_data) 
-```
+## MEDIATIONS: Negative granularity and appraisals/regulation predicting rating intensity
 
-## Plots
-```{r reg-plot}
-#Plot for Model 1a
-NegHiPlot <- ggplot(data=NegHiMod1.4, aes(x=ICCneg_fz_rev, y=NegHiEmo))+
-  geom_point(colour= "black", size = 2) + 
-  scale_x_continuous(breaks = scales::pretty_breaks(n = 8)) + scale_y_continuous(breaks = scales::pretty_breaks(n = 8))+ 
-  geom_smooth(method="lm", colour= "royalblue4", fill="royalblue4") + labs(x="Negative Emotional Granularity", y="Negative High Arousal Emotion Ratings") +  theme(plot.title = element_text(face="bold", hjust = 0.5), axis.title.x = element_text(face="bold"), axis.title.y = element_text(face="bold"), panel.background = element_rect(fill ="white", colour = "black"), axis.ticks.length.y = unit(.1, "cm"),axis.ticks.length.x = unit(-.1, "cm"))
-NegHiPlot #printing plot
+```{r mediation}
+#Make sure to download PROCESS macro for R: https://www.processmacro.org/download.html. Then open process.R file and run. Syntax is then ready to execute.
 
-#Save plot
-ggsave("~/Desktop/plot.pdf", plot = last_plot(), device = "pdf", height = 8, width = 8)
-```
+process(data = final_data, y= "NegHiEmo", x="ICCneg_fz_rev", m= "SelfBlame", model = 4, effsize = 1, total =1, stand = 1, cov = "SNSreact_z", boot = 10000, seed = 1234)
 
-## MEDIATIONS: Negative granularity and physio reactivity predicting rating intensity
+process(data = final_data, y= "NegHiEmo", x="Complexity", m= "SelfBlame", model = 4, effsize = 1, total =1, stand = 1, cov = "SNSreact_z", boot = 10000, seed = 1234) #sig indirect
 
-```{r mediate-prep}
-mediation_data <- final_data %>%
-  dplyr::select(ID, ICCneg_fz_rev, SNSreact, cvRMSDD_TSSTReact, logSomatic_mean, Threat_mean, Challenged_mean, NegHiEmo, SD_NegEmo, SD_SS) %>%
-  dplyr::mutate(SNSreact_z = scale(SNSreact, center = F, scale = T),
-                RMSDDreact_z = scale(cvRMSDD_TSSTReact, center = F, scale = T),
-                Threat_mean_z = scale(Threat_mean, center = F, scale = T),
-                Challenged_mean_z = scale(Challenged_mean, center = F, scale = T),)
+#Mediation with ICCneg_fz_rev as a
+mediation1 <- "# a path
+         ICCneg_fz_rev ~ a * SelfBlame
+
+         # b path
+         NegHiEmo ~ b * SelfBlame
+
+         # c prime path 
+         NegHiEmo ~ cp * ICCneg_fz_rev
+
+         # indirect and total effects
+         ab := a * b
+         total := cp + ab"
+
+set.seed(1234) #set seed to reproduce CIs
+
+fsem1 <- sem(mediation1, data = final_data, se = "bootstrap", bootstrap = 10000) #fit model
+summary(fsem1, standardized = TRUE) #summarize
+
+parameterestimates(fsem1, boot.ci.type = "bca.simple", standardized = TRUE) %>% 
+  kable() #print all model parameters
+
+#Mediation with complexity as a
+mediation2 <- "# a path
+         Complexity_z ~ a * SelfBlame
+
+         # b path
+         NegHiEmo ~ b * SelfBlame
+
+         # c prime path 
+         NegHiEmo ~ cp * Complexity_z
+
+         # indirect and total effects
+         ab := a * b
+         total := cp + ab"
+
+set.seed(1234)
+
+fsem2 <- sem(mediation2, data = final_data, se = "bootstrap", bootstrap = 10000)
+summary(fsem2, standardized = TRUE)
+
+parameterestimates(fsem2, boot.ci.type = "bca.simple", standardized = TRUE) %>% 
+  kable()
+
 ```
