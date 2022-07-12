@@ -629,9 +629,6 @@ set.seed(1234) #set seed to reproduce CIs
 fsem1 <- sem(mediation1, data = final_data, se = "bootstrap", bootstrap = 10000) #fit model
 summary(fsem1, standardized = TRUE) #summarize
 
-parameterestimates(fsem1, boot.ci.type = "bca.simple", standardized = TRUE) %>% 
-  kable() #print all model parameters
-
 #Mediation with complexity as a
 mediation2 <- "# a path
          Complexity_z ~ a * SelfBlame
@@ -650,8 +647,5 @@ set.seed(1234)
 
 fsem2 <- sem(mediation2, data = final_data, se = "bootstrap", bootstrap = 10000)
 summary(fsem2, standardized = TRUE)
-
-parameterestimates(fsem2, boot.ci.type = "bca.simple", standardized = TRUE) %>% 
-  kable()
 
 ```
